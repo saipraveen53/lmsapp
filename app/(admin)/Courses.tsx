@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Alert,
   Image,
@@ -66,10 +66,10 @@ const Courses: React.FC = () => {
   const [courses, setCourses] = useState<Course[]>(sampleCourses);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
-  
+
   // Initialize form with Partial values
   const [form, setForm] = useState<Partial<CourseForm>>({});
-  
+
   const { width } = useWindowDimensions();
 
   // Responsive columns
@@ -98,7 +98,7 @@ const Courses: React.FC = () => {
     setForm({
       ...c,
       price: c.price?.toString() || "0", // Convert number to string for editing
-    });
+    } as Partial<CourseForm>);
     setModalVisible(true);
   };
 
@@ -209,10 +209,9 @@ const Courses: React.FC = () => {
                 <Text className="text-xs text-sky-400 mt-1 mb-2">
                   {c.courseId} • {c.status}
                 </Text>
-                
-                {/* Fixed: Used prop instead of invalid class for line clamping */}
-                <Text 
-                  className="text-sm text-sky-600 mb-3" 
+
+                <Text
+                  className="text-sm text-sky-600 mb-3"
                   numberOfLines={3}
                 >
                   {c.description}
@@ -259,7 +258,7 @@ const Courses: React.FC = () => {
         {/* Modal Form */}
         <Modal animationType="slide" visible={modalVisible} transparent>
           {/* KeyboardAvoidingView fixes keyboard covering input fields */}
-          <KeyboardAvoidingView 
+          <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : "height"}
             className="flex-1 justify-end bg-black bg-opacity-40"
           >
@@ -284,7 +283,7 @@ const Courses: React.FC = () => {
               <ScrollView showsVerticalScrollIndicator={false}>
                 <Text className="text-xs text-sky-500 mb-1">Course ID</Text>
                 <TextInput
-                  value={form.courseId}
+                  value={String(form.courseId ?? "")}
                   onChangeText={(v) => setForm((s) => ({ ...s, courseId: v }))}
                   className="border border-sky-100 rounded-md px-3 py-2 mb-3 bg-gray-50"
                   placeholder="C001"
@@ -292,7 +291,7 @@ const Courses: React.FC = () => {
 
                 <Text className="text-xs text-sky-500 mb-1">Name</Text>
                 <TextInput
-                  value={form.name}
+                  value={String(form.name ?? "")}
                   onChangeText={(v) => setForm((s) => ({ ...s, name: v }))}
                   className="border border-sky-100 rounded-md px-3 py-2 mb-3 bg-gray-50"
                   placeholder="Course name"
@@ -300,7 +299,7 @@ const Courses: React.FC = () => {
 
                 <Text className="text-xs text-sky-500 mb-1">Description</Text>
                 <TextInput
-                  value={form.description}
+                  value={String(form.description ?? "")}
                   onChangeText={(v) =>
                     setForm((s) => ({ ...s, description: v }))
                   }
@@ -315,7 +314,7 @@ const Courses: React.FC = () => {
                   Thumbnail URL
                 </Text>
                 <TextInput
-                  value={form.thumbnailUrl}
+                  value={String(form.thumbnailUrl ?? "")}
                   onChangeText={(v) =>
                     setForm((s) => ({ ...s, thumbnailUrl: v }))
                   }
@@ -325,12 +324,12 @@ const Courses: React.FC = () => {
 
                 <Text className="text-xs text-sky-500 mb-1">Price</Text>
                 <TextInput
-                  value={form.price}
-                  // Fixed: We store string directly so user can type decimals (e.g. "10.")
+                  value={String(form.price ?? "")}
+                  // We store price as string for typing
                   onChangeText={(v) => setForm((s) => ({ ...s, price: v }))}
                   className="border border-sky-100 rounded-md px-3 py-2 mb-3 bg-gray-50"
                   placeholder="0"
-                  keyboardType="numeric"
+                  keyboardType={Platform.OS === "web" ? "default" : "numeric"}
                 />
 
                 <View className="flex-row items-center justify-between mb-3">
