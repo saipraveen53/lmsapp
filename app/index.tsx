@@ -1,12 +1,14 @@
-import { Text, View } from "react-native";
-import "./globals.css";
- 
-export default function Index() {
+import { Link } from 'expo-router'
+import React from 'react'
+import { Text, View } from 'react-native'
+
+const Loginn = () => {
   return (
-    <View className="flex-1 items-center justify-center bg-white">
-      <Text className="text-xl font-bold text-blue-500">
-        Welcome to Nativewind!
-      </Text>
+    <View>
+      <Text>Loginn</Text>
+      <Link  href='/(auth)/Signup' >Go to SignUP page</Link>
     </View>
-  );
+  )
 }
+
+export default Loginn
