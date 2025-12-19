@@ -59,7 +59,7 @@ const LmsContext = ({ children }: { children: ReactNode }) => {
   const redirectBasedOnRole = (role: string) => {
     const normalizedRole = role ? role.toUpperCase() : '';
     if (normalizedRole.includes('ADMIN')) {
-      router.replace('/(dashboard)/admin');
+      router.replace('/(admin)/Courses');
     } else {
       router.replace('/(dashboard)/student');
     }

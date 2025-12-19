@@ -9,8 +9,10 @@ import {
 import { useRouter } from 'expo-router';
 import { Drawer } from 'expo-router/drawer';
 import React from 'react';
-import { Text, View } from 'react-native';
+import { Image, Text, View } from 'react-native';
 import "../globals.css";
+
+const logoImg = require('../../assets/images/anasol-logo.png');
 
 const CustomDrawerContent = (props: DrawerContentComponentProps): React.ReactElement => {
   const router = useRouter();
@@ -25,9 +27,9 @@ const CustomDrawerContent = (props: DrawerContentComponentProps): React.ReactEle
       <DrawerContentScrollView {...props} contentContainerStyle={{ paddingTop: 0 }}>
         <View className="bg-sky-600 w-full p-6 pt-16 items-center justify-center mb-6">
           <View className="h-24 w-24 bg-white rounded-full items-center justify-center mb-3 shadow-md border-4 border-sky-300">
-            <Text className="text-5xl">🎓</Text>
+            <Image source={logoImg} style={{ width: 56, height: 56, resizeMode: 'contain' }} />
           </View>
-          <Text className="text-white text-2xl font-bold text-center">Student App</Text>
+          <Text className="text-white text-2xl font-bold text-center">Anasol LMS</Text>
           <Text className="text-sky-100 text-sm font-medium text-center opacity-90">Admin Portal</Text>
         </View>
 
