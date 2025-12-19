@@ -95,6 +95,14 @@ const MobileLogin = () => {
             </TouchableOpacity>
           </View>
 
+          {/* Forgot Password Link - Mobile */}
+          <TouchableOpacity 
+            style={{ alignSelf: 'flex-end', marginBottom: 20 }} 
+            onPress={() => router.push('/(auth)/ForgotPassword')}
+          >
+            <Text style={{ color: '#4f46e5', fontWeight: '600', fontSize: 13 }}>Forgot Password?</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity onPress={handleLogin} disabled={isLoading} activeOpacity={0.8}>
             <LinearGradient
               colors={['#e11d48', '#4338ca']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
@@ -193,6 +201,14 @@ const WebLogin = () => {
                 </TouchableOpacity>
               </View>
             </View>
+
+            {/* Forgot Password Link - Web */}
+            <TouchableOpacity 
+              style={{ alignSelf: 'flex-end' }}
+              onPress={() => router.push('/(auth)/ForgotPassword')}
+            >
+              <Text className="text-indigo-600 font-bold text-sm">Forgot Password?</Text>
+            </TouchableOpacity>
 
             <TouchableOpacity onPress={handleLogin} disabled={isLoading}>
               <LinearGradient colors={['#e11d48', '#4338ca']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} className="rounded-lg shadow-lg py-4 items-center">
