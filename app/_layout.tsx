@@ -8,6 +8,7 @@ export default function RootLayout() {
     <LmsContext>
         <Stack>
       <Stack.Screen name="(auth)" options={{headerShown:false}} />
+      <Stack.Screen name="(admin)" options={{headerShown:false}} />
     </Stack>
     </LmsContext>
     
