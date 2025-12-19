@@ -61,7 +61,7 @@ const LmsContext = ({ children }: { children: ReactNode }) => {
     if (normalizedRole.includes('ADMIN')) {
       router.replace('/(dashboard)/admin');
     } else {
-      router.replace('/(dashboard)/student');
+      router.replace('/(student)/Home');
     }
   };
 
