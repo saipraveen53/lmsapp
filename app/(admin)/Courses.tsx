@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from 'expo-linear-gradient';
+import { LinearGradient } from "expo-linear-gradient";
 import React, { JSX, useMemo, useState } from "react";
 import {
   Alert,
@@ -339,18 +339,19 @@ export default function Courses(): JSX.Element {
   const cardGap = 20;
   const padding = 24;
   const cardWidth = (width - (padding * 2) - (cardGap * (columns - 1))) / columns;
-const BRAND_GRADIENT = ['#7c3aed', '#db2777', '#ea580c'] as const;
+
   return (
     <SafeAreaView style={styles.container}>
         {/*<StatusBar barStyle="light-content" backgroundColor={THEME.primary} />*/}
       
       {/* HEADER */}
-      <LinearGradient
-  colors={BRAND_GRADIENT}
+  <LinearGradient
+  colors={['#7c3aed', '#db2777', '#ea580c']}
   start={{ x: 0, y: 0 }}
-  end={{ x: 1, y: 0 }}
+  end={{ x: 1, y: 1 }}
+  style={styles.headerContainer}
 >
-  <View style={styles.headerContainer}>
+  <View style={{ flex: 1, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
     <View>
       <Text style={styles.headerTitle}>ANASOL LMS</Text>
       <Text style={styles.headerSubtitle}>Course Management Dashboard</Text>
@@ -593,7 +594,7 @@ const styles = StyleSheet.create({
   },
   // HEADER
   headerContainer: {
-    backgroundColor:"BRAND_GRADIENT", // Deep Purple base
+    //backgroundColor:"#7c3aed", // Deep Purple base
     paddingHorizontal: 24,
     paddingVertical: 20,
     paddingBottom: 40,

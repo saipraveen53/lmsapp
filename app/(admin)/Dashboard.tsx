@@ -1,6 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useMemo } from "react";
+import jwtDecode from "jwt-decode";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Image,
   Pressable,
@@ -11,7 +13,6 @@ import {
   View
 } from "react-native";
 import "../globals.css"; // Ensure your tailwind/nativewind setup is here
-
 // --- Types ---
 type Course = {
   courseId: string;
@@ -81,11 +82,26 @@ export default function Dashboard() {
   const paidPct = stats.totalCourses ? Math.round((stats.paidCourses / stats.totalCourses) * 100) : 0;
   const freePct = 100 - paidPct;
 
+  const [username, setUserName] = useState("Admin");
   const logoImg = require('../../assets/images/anasol-logo.png');
   // The Gradient Colors extracted from the image
   // Purple -> Pink/Red -> Orange
   const BRAND_GRADIENT = ['#7c3aed', '#db2777', '#ea580c'] as const;
 
+   useEffect(() => {
+    const fetchUsername = async () => {
+      try {
+        const token = await AsyncStorage.getItem("accessToken");
+        if (token) {
+          const decode: any = jwtDecode(token);
+          setUserName(decode.sub || "Admin");
+        }
+      } catch (error) {
+        console.log("Error fetching user:", error);
+      }
+    };
+    fetchUsername();
+  }, []);
   return (
     <View className="flex-1 bg-gray-50">
       <StatusBar barStyle="light-content" />
@@ -101,7 +117,7 @@ export default function Dashboard() {
     zIndex: 10,
     width: isDesktop ? '100%': '100%', // 800 can be any px value for desktop
     alignSelf: 'center', // Center on desktop
-    height: isDesktop ? 120 : 120,
+    height: isDesktop ? 140 : 120,
   }}
 >
         <View className="flex-row justify-between items-center max-w-8xl mx-auto w-full">
@@ -114,7 +130,7 @@ export default function Dashboard() {
                <Text className="text-white/80 ml-2 font-semibold tracking-widest text-xs uppercase">Anasol LMS</Text>
             </View>
             <Text className="text-3xl font-bold text-white">Dashboard</Text>
-            <Text className="text-white/80 text-sm mt-1">Welcome back, Administrator</Text>
+            <Text className="text-white/80 text-sm mt-1">Welcome <Text className="text-white/80 font-semibold text-2xl mt-1">{username}</Text></Text>
           </View>
           
           <View className="flex-row space-x-3">
