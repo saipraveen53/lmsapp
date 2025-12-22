@@ -1,19 +1,22 @@
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import React, { useMemo } from "react";
 import {
-    Image,
-    Pressable,
-    SafeAreaView,
-    ScrollView,
-    Text,
-    useWindowDimensions,
-    View,
+  Image,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  Text,
+  useWindowDimensions,
+  View
 } from "react-native";
-import "../globals.css";
+import "../globals.css"; // Ensure your tailwind/nativewind setup is here
 
+// --- Types ---
 type Course = {
   courseId: string;
   name: string;
+  category: string;
   thumbnailUrl?: string;
   price?: number;
   isPaid: boolean;
@@ -22,17 +25,49 @@ type Course = {
   createdAt: string;
 };
 
+// --- Mock Data ---
 const sampleCourses: Course[] = [
-  { courseId: "C001", name: "Intro to React", thumbnailUrl: "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800&q=60", price: 0, isPaid: false, videos: 8, status: "active", createdAt: new Date().toISOString() },
-  { courseId: "C002", name: "Advanced TypeScript", thumbnailUrl: "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=800&q=60", price: 49, isPaid: true, videos: 15, status: "active", createdAt: new Date().toISOString() },
-  { courseId: "C003", name: "UI Design Basics", thumbnailUrl: "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=800&q=60", price: 29, isPaid: true, videos: 10, status: "inactive", createdAt: new Date().toISOString() },
-  { courseId: "C004", name: "Algorithms 101", thumbnailUrl: "", price: 0, isPaid: false, videos: 20, status: "active", createdAt: new Date().toISOString() },
+  { courseId: "C001", name: "Intro to React Native", category: "Mobile Dev", thumbnailUrl: "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800&q=60", price: 0, isPaid: false, videos: 8, status: "active", createdAt: new Date().toISOString() },
+  { courseId: "C002", name: "Advanced TypeScript", category: "Web Dev", thumbnailUrl: "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=800&q=60", price: 49, isPaid: true, videos: 15, status: "active", createdAt: new Date().toISOString() },
+  { courseId: "C003", name: "UI/UX Design Master", category: "Design", thumbnailUrl: "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=800&q=60", price: 29, isPaid: true, videos: 10, status: "inactive", createdAt: new Date().toISOString() },
+  { courseId: "C004", name: "Algorithms & DS", category: "CS Basics", thumbnailUrl: "", price: 0, isPaid: false, videos: 20, status: "active", createdAt: new Date().toISOString() },
+  { courseId: "C005", name: "DevOps Pipeline", category: "DevOps", thumbnailUrl: "https://images.unsplash.com/photo-1667372393119-c81c0cda0a29?w=800&q=60", price: 99, isPaid: true, videos: 45, status: "active", createdAt: new Date().toISOString() },
 ];
 
 const mockStudents = 1248;
 
+// --- Components ---
+
+// 1. Reusable Stat Card
+const StatCard = ({ label, value, subtext, icon, color, width }: any) => (
+  <View 
+    className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100" 
+    style={{ width: width, marginBottom: 16 }}
+  >
+    <View className="flex-row justify-between items-start">
+      <View>
+        <Text className="text-gray-500 text-xs font-medium uppercase tracking-wider">{label}</Text>
+        <Text className="text-2xl font-bold text-gray-800 mt-1">{value}</Text>
+      </View>
+      <View className={`p-2 rounded-xl ${color} bg-opacity-10`}>
+        <Ionicons name={icon} size={20} color="#4c1d95" /> 
+      </View>
+    </View>
+    <Text className="text-xs text-gray-400 mt-2">{subtext}</Text>
+  </View>
+);
+
 export default function Dashboard() {
   const { width } = useWindowDimensions();
+  const isDesktop = width >= 1024;
+  const isTablet = width >= 768 && width < 1024;
+
+  // Layout Logic
+  // Desktop: 4 cards (gap handled via calc or style), Tablet: 2 cards, Mobile: 1 card (or 2 small)
+  let cardWidth = "100%"; 
+  if (isDesktop) cardWidth = "23.5%"; // 4 columns
+  else if (isTablet) cardWidth = "48%"; // 2 columns
+  else cardWidth = "48%"; // 2 columns on mobile too for tighter look, or 100%
 
   const stats = useMemo(() => {
     const totalCourses = sampleCourses.length;
@@ -43,155 +78,193 @@ export default function Dashboard() {
     return { totalCourses, totalVideos, paidCourses, freeCourses, avgVideosPerCourse };
   }, []);
 
-  const columnLayout = width >= 1000 ? "row" : "column";
-  const cardWidth = width >= 1000 ? `${100 / 4 - 1}%` : "100%";
-
   const paidPct = stats.totalCourses ? Math.round((stats.paidCourses / stats.totalCourses) * 100) : 0;
   const freePct = 100 - paidPct;
 
+  const logoImg = require('../../assets/images/anasol-logo.png');
+  // The Gradient Colors extracted from the image
+  // Purple -> Pink/Red -> Orange
+  const BRAND_GRADIENT = ['#7c3aed', '#db2777', '#ea580c'] as const;
+
   return (
-    <SafeAreaView className="flex-1 bg-sky-50">
-      <ScrollView contentContainerStyle={{ padding: 16 }}>
-        {/* Header */}
-        <View className="flex-row items-center justify-between mb-6">
+    <View className="flex-1 bg-gray-50">
+      <StatusBar barStyle="light-content" />
+      
+      {/* --- Header Section with Gradient --- */}
+    <LinearGradient
+  colors={BRAND_GRADIENT}
+  start={{ x: 0, y: 0 }}
+  end={{ x: 1, y: 1 }}
+  className="pt-0 pb-12 px-6 rounded-b-[30px] shadow-lg"
+  style={{
+    marginBottom: -20,
+    zIndex: 10,
+    width: isDesktop ? '100%': '100%', // 800 can be any px value for desktop
+    alignSelf: 'center', // Center on desktop
+    height: isDesktop ? 120 : 120,
+  }}
+>
+        <View className="flex-row justify-between items-center max-w-8xl mx-auto w-full">
           <View>
-            <Text className="text-2xl font-bold text-sky-700">Dashboard</Text>
-            <Text className="text-sm text-sky-500">Overview & analytics — Student App</Text>
-          </View>
-          {/*<View className="flex-row items-center space-x-3">
-            <Pressable className="flex-row items-center bg-white px-3 py-2 rounded-md shadow">
-              <Ionicons name="cloud-download-outline" size={18} color="#0ea5e9" />
-              <Text className="ml-2 text-sky-700 font-semibold">Export</Text>
-            </Pressable>
-            <Pressable className="flex-row items-center bg-sky-600 px-4 py-2 rounded-md shadow">
-              <Ionicons name="add" size={18} color="white" />
-              <Text className="ml-2 text-white font-semibold">New Course</Text>
-            </Pressable>
-          </View>*/}
-        </View>
-
-        {/* Summary cards */}
-        <View className="mb-6" style={{ flexDirection: columnLayout }}>
-          <View className="bg-white rounded-xl p-4 mr-4 mb-4 shadow" style={{ width: cardWidth, minWidth: 220 }}>
-            <Text className="text-xs text-sky-500">Total Courses</Text>
-            <Text className="text-2xl font-bold text-sky-700 mt-2">{stats.totalCourses}</Text>
-            <Text className="text-sm text-gray-500 mt-1">Active catalog items</Text>
-          </View>
-
-          <View className="bg-white rounded-xl p-4 mr-4 mb-4 shadow" style={{ width: cardWidth, minWidth: 220 }}>
-            <Text className="text-xs text-sky-500">Total Videos</Text>
-            <Text className="text-2xl font-bold text-sky-700 mt-2">{stats.totalVideos}</Text>
-            <Text className="text-sm text-gray-500 mt-1">Materials across courses</Text>
-          </View>
-
-          <View className="bg-white rounded-xl p-4 mr-4 mb-4 shadow" style={{ width: cardWidth, minWidth: 220 }}>
-            <Text className="text-xs text-sky-500">Total Students</Text>
-            <Text className="text-2xl font-bold text-sky-700 mt-2">{mockStudents}</Text>
-            <Text className="text-sm text-gray-500 mt-1">Enrolled users</Text>
-          </View>
-
-          <View className="bg-white rounded-xl p-4 mb-4 shadow" style={{ width: cardWidth, minWidth: 220 }}>
-            <Text className="text-xs text-sky-500">Avg Videos / Course</Text>
-            <Text className="text-2xl font-bold text-sky-700 mt-2">{stats.avgVideosPerCourse}</Text>
-            <Text className="text-sm text-gray-500 mt-1">Content density</Text>
-          </View>
-        </View>
-
-        {/* Paid vs Free Chart */}
-        <View className="bg-white rounded-xl p-4 mb-6 shadow">
-          <View className="flex-row items-center justify-between mb-3">
-            <Text className="text-lg font-bold text-sky-700">Paid vs Free Courses</Text>
-            <Text className="text-sm text-gray-500">{paidPct}% paid • {freePct}% free</Text>
-          </View>
-
-          <View className="w-full bg-gray-100 rounded-full h-4 overflow-hidden mb-3">
-            <View style={{ width: `${paidPct}%` }} className="h-full bg-sky-600" />
-            {/* free part is the remaining background */}
-          </View>
-
-          <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center space-x-2">
-              <View className="w-3 h-3 bg-sky-600 rounded" />
-              <Text className="text-sm text-sky-700 font-semibold">{stats.paidCourses} Paid</Text>
+            <View className="flex-row items-center space-x-2 mb-1">
+               {/* Small logo placeholder */}
+               <View className="w-10 h-10 bg-white/20 rounded-full items-center justify-center">
+                  <Image source={logoImg} style={{ width: 30, height: 30, resizeMode: 'contain' }} />
+               </View>
+               <Text className="text-white/80 ml-2 font-semibold tracking-widest text-xs uppercase">Anasol LMS</Text>
             </View>
-            <View className="flex-row items-center space-x-2">
-              <View className="w-3 h-3 bg-gray-300 rounded" />
-              <Text className="text-sm text-sky-700 font-semibold">{stats.freeCourses} Free</Text>
-            </View>
+            <Text className="text-3xl font-bold text-white">Dashboard</Text>
+            <Text className="text-white/80 text-sm mt-1">Welcome back, Administrator</Text>
+          </View>
+          
+          <View className="flex-row space-x-3">
+             <Pressable className="bg-white/20 p-2 rounded-full backdrop-blur-md">
+                <Ionicons name="notifications-outline" size={22} color="white" />
+             </Pressable>
+             {/*<Pressable className="bg-white/20 p-2 rounded-full backdrop-blur-md">
+                <Ionicons name="person-outline" size={22} color="white" />
+             </Pressable>*/}
           </View>
         </View>
+      </LinearGradient>
 
-        {/* Top Courses list (cards) */}
-        <View className="mb-6">
-          <Text className="text-lg font-bold text-sky-700 mb-3">Top Courses</Text>
-          <View className="space-y-3">
-            {sampleCourses.slice(0, 4).map((c) => (
-              <View key={c.courseId} className="bg-white rounded-xl p-3 flex-row items-center justify-between shadow">
-                <View className="flex-row items-center">
-                  <View className="rounded-md overflow-hidden bg-sky-100 mr-3" style={{ width: 64, height: 64, alignItems: "center", justifyContent: "center" }}>
-                    {c.thumbnailUrl ? (
-                      <Image source={{ uri: c.thumbnailUrl }} style={{ width: 64, height: 64 }} resizeMode="cover" />
-                    ) : (
-                      <Ionicons name="book-outline" size={32} color="#60a5fa" />
-                    )}
+      {/* --- Main Scrollable Content --- */}
+      <ScrollView 
+        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, paddingTop: 30 }}
+        showsVerticalScrollIndicator={false}
+      >
+        <View className="max-w-8xl mx-auto w-full">
+            
+            {/* 1. Statistics Grid */}
+            <View className="flex-row flex-wrap justify-between mb-2">
+              <StatCard 
+                label="Total Courses" 
+                value={stats.totalCourses} 
+                subtext="Active catalog items" 
+                icon="library" 
+                color="bg-purple-100" 
+                width={cardWidth} 
+              />
+              <StatCard 
+                label="Total Videos" 
+                value={stats.totalVideos} 
+                subtext="Content material" 
+                icon="videocam" 
+                color="bg-pink-100" 
+                width={cardWidth} 
+              />
+              <StatCard 
+                label="Total Students" 
+                value={mockStudents} 
+                subtext="Active enrollments" 
+                icon="people" 
+                color="bg-orange-100" 
+                width={cardWidth} 
+              />
+              <StatCard 
+                label="Engagement" 
+                value={`${stats.avgVideosPerCourse}`} 
+                subtext="Avg videos / course" 
+                icon="analytics" 
+                color="bg-indigo-100" 
+                width={cardWidth} 
+              />
+            </View>
+
+            {/* 2. Analytics Section (Chart) */}
+            <View className="bg-white rounded-2xl p-6 mb-8 shadow-sm border border-gray-100">
+              <View className="flex-row justify-between items-center mb-5">
+                <Text className="text-lg font-bold text-gray-800">Course Distribution</Text>
+                <Pressable>
+                  <Ionicons name="ellipsis-horizontal" size={20} color="#9ca3af" />
+                </Pressable>
+              </View>
+
+              {/* Custom Progress Bar */}
+              <View className="h-4 w-full bg-gray-100 rounded-full flex-row overflow-hidden mb-4">
+                 <LinearGradient 
+                    colors={['#7c3aed', '#db2777']}
+                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                    style={{ width: `${paidPct}%`, height: '100%' }} 
+                 />
+                 {/* Free section is transparent, showing bg-gray-100 */}
+              </View>
+
+              <View className="flex-row justify-between">
+                 <View className="flex-row items-center">
+                    <View className="w-3 h-3 rounded-full bg-purple-600 mr-2" />
+                    <View>
+                        <Text className="text-gray-500 text-xs">Paid Content</Text>
+                        <Text className="text-gray-800 font-bold">{stats.paidCourses} Courses ({paidPct}%)</Text>
+                    </View>
+                 </View>
+                 <View className="flex-row items-center">
+                    <View className="w-3 h-3 rounded-full bg-gray-300 mr-2" />
+                    <View>
+                        <Text className="text-gray-500 text-xs">Free Content</Text>
+                        <Text className="text-gray-800 font-bold">{stats.freeCourses} Courses ({freePct}%)</Text>
+                    </View>
+                 </View>
+              </View>
+            </View>
+
+            {/* 3. Top Courses List */}
+            <View className="mb-6 flex-row items-center justify-between">
+                <Text className="text-lg font-bold text-gray-800">Top Performing Courses</Text>
+                <Pressable>
+                    <Text className="text-purple-600 font-semibold text-sm">View All</Text>
+                </Pressable>
+            </View>
+
+            <View className="gap-y-4">
+              {sampleCourses.map((c) => (
+                <View 
+                  key={c.courseId} 
+                  className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex-row flex-wrap md:flex-nowrap items-center justify-between"
+                >
+                  <View className="flex-row items-center flex-1 min-w-[250px]">
+                    {/* Thumbnail */}
+                    <View className="h-16 w-16 rounded-xl bg-gray-100 overflow-hidden mr-4 border border-gray-100">
+                       {c.thumbnailUrl ? (
+                         <Image source={{ uri: c.thumbnailUrl }} className="w-full h-full" resizeMode="cover" />
+                       ) : (
+                         <View className="w-full h-full items-center justify-center bg-purple-50">
+                             <Ionicons name="image-outline" size={24} color="#7c3aed" />
+                         </View>
+                       )}
+                    </View>
+                    
+                    {/* Info */}
+                    <View>
+                        <Text className="text-xs text-orange-600 font-bold mb-0.5">{c.category}</Text>
+                        <Text className="text-base font-bold text-gray-800">{c.name}</Text>
+                        <View className="flex-row items-center mt-1">
+                           <Ionicons name="videocam-outline" size={12} color="#9ca3af" />
+                           <Text className="text-xs text-gray-400 ml-1 mr-3">{c.videos} Videos</Text>
+                           <View className={`px-2 py-0.5 rounded-full ${c.status === 'active' ? 'bg-green-100' : 'bg-gray-100'}`}>
+                              <Text className={`text-[10px] font-bold ${c.status === 'active' ? 'text-green-700' : 'text-gray-500'}`}>
+                                 {c.status.toUpperCase()}
+                              </Text>
+                           </View>
+                        </View>
+                    </View>
                   </View>
-                  <View style={{ maxWidth: "65%" }}>
-                    <Text className="font-semibold text-sky-700">{c.name}</Text>
-                    <Text className="text-xs text-gray-500">{c.courseId} • {c.status} • {c.videos ?? 0} videos</Text>
+
+                  {/* Price & Action */}
+                  <View className="flex-row items-center justify-between w-full md:w-auto mt-4 md:mt-0 pl-0 md:pl-4">
+                      <Text className="text-lg font-bold text-gray-800 mr-4">
+                         {c.isPaid ? `$${c.price}` : <Text className="text-green-600">Free</Text>}
+                      </Text>
+                      
+                      <Pressable className="bg-gray-50 p-2 rounded-full border border-gray-100">
+                         <Ionicons name="chevron-forward" size={20} color="#374151" />
+                      </Pressable>
                   </View>
                 </View>
-
-                <View className="items-end">
-                  <Text className="text-sm font-semibold text-sky-700">{c.isPaid ? `$${(c.price ?? 0).toFixed(2)}` : "Free"}</Text>
-                  <View className="flex-row items-center mt-2">
-                    <Pressable className="px-3 py-1 bg-sky-600 rounded-md mr-2">
-                      <Text className="text-white font-semibold">Manage</Text>
-                    </Pressable>
-                    <Pressable className="px-3 py-1 bg-gray-100 rounded-md">
-                      <Ionicons name="ellipsis-horizontal" size={18} color="#374151" />
-                    </Pressable>
-                  </View>
-                </View>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* Insights / quick actions */}
-        <View className="bg-white rounded-xl p-4 mb-10 shadow">
-          <Text className="text-lg font-bold text-sky-700 mb-3">Quick Insights</Text>
-
-          <View className="flex-row flex-wrap -mx-2">
-            <View className="p-2 w-1/2 md:w-1/4">
-              <View className="bg-sky-50 rounded-lg p-3 items-start">
-                <Text className="text-xs text-gray-500">Active Courses</Text>
-                <Text className="text-xl font-bold text-sky-700 mt-2">{sampleCourses.filter(s => s.status === "active").length}</Text>
-              </View>
+              ))}
             </View>
-
-            <View className="p-2 w-1/2 md:w-1/4">
-              <View className="bg-sky-50 rounded-lg p-3 items-start">
-                <Text className="text-xs text-gray-500">Inactive Courses</Text>
-                <Text className="text-xl font-bold text-amber-500 mt-2">{sampleCourses.filter(s => s.status === "inactive").length}</Text>
-              </View>
-            </View>
-
-            <View className="p-2 w-1/2 md:w-1/4">
-              <View className="bg-sky-50 rounded-lg p-3 items-start">
-                <Text className="text-xs text-gray-500">Total Students</Text>
-                <Text className="text-xl font-bold text-sky-700 mt-2">{mockStudents}</Text>
-              </View>
-            </View>
-
-            <View className="p-2 w-1/2 md:w-1/4">
-              <View className="bg-sky-50 rounded-lg p-3 items-start">
-                <Text className="text-xs text-gray-500">Avg Videos</Text>
-                <Text className="text-xl font-bold text-sky-700 mt-2">{Math.round(stats.totalVideos / Math.max(1, stats.totalCourses))}</Text>
-              </View>
-            </View>
-          </View>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
