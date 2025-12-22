@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { jwtDecode } from 'jwt-decode';
 import React, { useEffect, useState } from 'react';
 import {
+    Alert,
     Dimensions,
     Image,
     Modal,
@@ -22,16 +23,18 @@ const categories = ["All", "Coding", "Design", "Business", "Marketing", "Music",
 
 const continueLearning = {
   title: "Full Stack Web Development",
+  libraryId: "567017", 
   progress: 65,
   totalLessons: 40,
   completedLessons: 26,
   thumbnail: "https://img.freepik.com/free-vector/web-development-programmer-engineering-coding-website-augmented-reality-interface-screens-developer-project-engineer-programming-software-application-design-cartoon-illustration_107791-3863.jpg"
 };
 
-// --- EXPANDED POPULAR COURSES (10 ITEMS) ---
+// --- POPULAR COURSES ---
 const popularCourses = [
   {
     id: 1,
+    libraryId: "567017", 
     title: "React Native for Beginners",
     author: "Suresh Tech",
     rating: 4.8,
@@ -45,6 +48,7 @@ const popularCourses = [
   },
   {
     id: 2,
+    libraryId: "100002",
     title: "Master UI/UX Design",
     author: "Creative Minds",
     rating: 4.9,
@@ -58,6 +62,7 @@ const popularCourses = [
   },
   {
     id: 3,
+    libraryId: "100003",
     title: "Digital Marketing 101",
     author: "Grow Business",
     rating: 4.5,
@@ -71,6 +76,7 @@ const popularCourses = [
   },
   {
     id: 4,
+    libraryId: "100004",
     title: "Python for Data Science",
     author: "Data Wizards",
     rating: 4.7,
@@ -84,6 +90,7 @@ const popularCourses = [
   },
   {
     id: 5,
+    libraryId: "100005",
     title: "Graphic Design Masterclass",
     author: "Design Pro",
     rating: 4.6,
@@ -97,6 +104,7 @@ const popularCourses = [
   },
   {
     id: 6,
+    libraryId: "100006",
     title: "Financial Analysis & Investing",
     author: "Wall Street Prep",
     rating: 4.8,
@@ -110,6 +118,7 @@ const popularCourses = [
   },
   {
     id: 7,
+    libraryId: "100007",
     title: "Photography for Beginners",
     author: "Lens Queen",
     rating: 4.9,
@@ -123,6 +132,7 @@ const popularCourses = [
   },
   {
     id: 8,
+    libraryId: "100008",
     title: "Public Speaking Mastery",
     author: "Speak Up",
     rating: 4.7,
@@ -136,6 +146,7 @@ const popularCourses = [
   },
   {
     id: 9,
+    libraryId: "100009",
     title: "Ethical Hacking Bootcamp",
     author: "Cyber Secure",
     rating: 4.8,
@@ -149,6 +160,7 @@ const popularCourses = [
   },
   {
     id: 10,
+    libraryId: "100010",
     title: "Machine Learning A-Z",
     author: "AI Future",
     rating: 4.9,
@@ -175,19 +187,19 @@ const Home = () => {
   const [activeCategory, setActiveCategory] = useState("All");
   const [username, setUserName] = useState("Student");
   
-  // Logout Modal State
-  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
-
-  // --- NEW: Course Details Modal State ---
+  // --- COURSE DETAILS MODAL ---
   const [courseModalVisible, setCourseModalVisible] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState(null);
+
+  // --- MOCK ENROLLED COURSES ---
+  const [enrolledCourseIds, setEnrolledCourseIds] = useState([1]); 
 
   useEffect(() => {
     let fetchUsername = async () => {
       try {
         const token = await AsyncStorage.getItem("accessToken");
         if (token) {
-          const decode = jwtDecode(token);
+          const decode: any = jwtDecode(token);
           setUserName(decode.sub || "Student");
         }
       } catch (error) {
@@ -197,20 +209,41 @@ const Home = () => {
     fetchUsername();
   }, [])
 
-  const handleLogout = async () => {
-    try {
-      await AsyncStorage.removeItem("accessToken");
-      setLogoutModalVisible(false);
-      router.replace("/");
-    } catch (error) {
-      console.log("Logout failed:", error);
-    }
-  };
-
   // Function to open Course Modal
-  const openCourseDetails = (course) => {
+  const openCourseDetails = (course: any) => {
     setSelectedCourse(course);
     setCourseModalVisible(true);
+  };
+
+  // --- HANDLE ENROLL ---
+  const handleEnroll = () => {
+    Alert.alert(
+        "Enrollment Successful!", 
+        `You have successfully enrolled in ${selectedCourse?.title}`, 
+        [
+            { 
+                text: "Start Learning", 
+                onPress: () => {
+                    if(selectedCourse) {
+                        setEnrolledCourseIds((prev) => [...prev, selectedCourse.id]);
+                    }
+                } 
+            }
+        ]
+    );
+  };
+
+  // --- HANDLE CONTINUE LEARNING ---
+  const handleContinueLearning = () => {
+    setCourseModalVisible(false);
+    if (selectedCourse?.libraryId) {
+        router.push({
+            pathname: "/(videos)/[id]",
+            params: { id: selectedCourse.libraryId }
+        });
+    } else {
+        Alert.alert("Error", "Course content not available yet.");
+    }
   };
 
   return (
@@ -226,8 +259,10 @@ const Home = () => {
               {username} 👋
             </Text>
           </View>
+          
+          {/* USER ICON - Navigate to Profile */}
           <TouchableOpacity 
-            onPress={() => setLogoutModalVisible(true)}
+            onPress={() => router.push('/(student)/MyProfile')}
             className="bg-gray-100 p-1 rounded-full border border-gray-200"
           >
             <Image
@@ -279,7 +314,10 @@ const Home = () => {
           <Text className="text-lg font-bold text-gray-800 mb-3">Continue Learning</Text>
           <TouchableOpacity
             activeOpacity={0.8}
-            onPress={() => router.push('/(videos)/Video')}
+            onPress={() => router.push({
+                pathname: "/(videos)/[id]",
+                params: { id: continueLearning.libraryId }
+            })}
             className="bg-white border border-indigo-100 rounded-3xl p-4 flex-row items-center shadow-sm"
           >
             <Image
@@ -351,83 +389,71 @@ const Home = () => {
                <Text className="text-indigo-600 font-bold text-xs">View All</Text>
             </TouchableOpacity>
           </View>
-          {popularCourses.map((course) => (
-            <TouchableOpacity
-              key={course.id}
-              // --- 1. OPEN COURSE MODAL ON PRESS ---
-              onPress={() => openCourseDetails(course)}
-              className="bg-white p-3 rounded-3xl mb-4 shadow-sm border border-gray-100 flex-row"
-            >
-              <Image
-                source={{ uri: course.thumbnail }}
-                className="w-28 h-28 rounded-2xl bg-gray-50"
-              />
-              <View className="flex-1 ml-4 justify-center py-1">
-                <View className="flex-row justify-between items-start mb-1">
-                  <View className="bg-orange-50 px-2 py-0.5 rounded">
-                     <Text className="text-orange-500 text-[10px] font-bold uppercase">{course.tag}</Text>
-                  </View>
-                  <View className="flex-row items-center">
-                     <Text className="text-yellow-400 text-xs">★</Text>
-                     <Text className="text-gray-800 font-bold text-xs ml-1">{course.rating}</Text>
-                  </View>
-                </View>
-                <Text className="text-base font-bold text-gray-900 mb-1 leading-tight" numberOfLines={2}>
-                  {course.title}
-                </Text>
-                <Text className="text-gray-400 text-xs mb-3">By {course.author}</Text>
-                <View className="flex-row items-center justify-between">
-                  <Text className="text-indigo-600 font-extrabold text-lg">{course.price}</Text>
-                  <View className="bg-gray-50 p-2 rounded-full">
-                     <Text className="text-gray-400 text-xs font-bold">+</Text>
-                  </View>
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))}
+          
+          {popularCourses.map((course) => {
+            const isEnrolled = enrolledCourseIds.includes(course.id);
+            return (
+                <TouchableOpacity
+                    key={course.id}
+                    onPress={() => openCourseDetails(course)}
+                    className="bg-white p-3 rounded-3xl mb-4 shadow-sm border border-gray-100 flex-row"
+                >
+                    <Image
+                        source={{ uri: course.thumbnail }}
+                        className="w-28 h-28 rounded-2xl bg-gray-50"
+                    />
+                    <View className="flex-1 ml-4 justify-center py-1">
+                        <View className="flex-row justify-between items-start mb-1">
+                            {isEnrolled ? (
+                                <View className="bg-green-100 px-2 py-0.5 rounded">
+                                    <Text className="text-green-600 text-[10px] font-bold uppercase">PURCHASED</Text>
+                                </View>
+                            ) : (
+                                <View className="bg-orange-50 px-2 py-0.5 rounded">
+                                    <Text className="text-orange-500 text-[10px] font-bold uppercase">{course.tag}</Text>
+                                </View>
+                            )}
+
+                            <View className="flex-row items-center">
+                                <Text className="text-yellow-400 text-xs">★</Text>
+                                <Text className="text-gray-800 font-bold text-xs ml-1">{course.rating}</Text>
+                            </View>
+                        </View>
+                        
+                        <Text className="text-base font-bold text-gray-900 mb-1 leading-tight" numberOfLines={2}>
+                        {course.title}
+                        </Text>
+                        <Text className="text-gray-400 text-xs mb-3">By {course.author}</Text>
+                        
+                        <View className="flex-row items-center justify-between">
+                            {isEnrolled ? (
+                                <Text className="text-green-600 font-bold text-sm">Owned</Text>
+                            ) : (
+                                <Text className="text-indigo-600 font-extrabold text-lg">{course.price}</Text>
+                            )}
+
+                            <View className={`p-2 rounded-full ${isEnrolled ? 'bg-green-100' : 'bg-gray-50'}`}>
+                                <Text className={`text-xs font-bold ${isEnrolled ? 'text-green-600' : 'text-gray-400'}`}>
+                                    {isEnrolled ? '✓' : '+'}
+                                </Text>
+                            </View>
+                        </View>
+                    </View>
+                </TouchableOpacity>
+            );
+          })}
         </View>
       </ScrollView>
 
-
-      {/* --- 2. LOGOUT MODAL --- */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={logoutModalVisible}
-        onRequestClose={() => setLogoutModalVisible(false)}
-      >
-        <View className="flex-1 justify-center items-center bg-black/50">
-          <View className="bg-white w-[85%] p-6 rounded-3xl shadow-xl items-center">
-             <View className="bg-red-50 p-4 rounded-full mb-4">
-                <Text className="text-3xl">🚪</Text>
-             </View>
-             <Text className="text-xl font-bold text-gray-900 mb-2">Sign Out?</Text>
-             <Text className="text-gray-500 text-center mb-6 px-4">
-                Are you sure you want to sign out? You'll need to login again to access your courses.
-             </Text>
-             <View className="flex-row w-full gap-x-4">
-                <TouchableOpacity onPress={() => setLogoutModalVisible(false)} className="flex-1 py-3.5 bg-gray-100 rounded-xl">
-                   <Text className="text-gray-700 font-bold text-center">Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={handleLogout} className="flex-1 py-3.5 bg-red-500 rounded-xl shadow-md shadow-red-200">
-                   <Text className="text-white font-bold text-center">Logout</Text>
-                </TouchableOpacity>
-             </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* --- 3. COURSE DETAILS MODAL (Green Enroll Button at Bottom) --- */}
+      {/* --- COURSE DETAILS MODAL --- */}
       <Modal
         animationType="slide"
         visible={courseModalVisible}
-        presentationStyle="pageSheet" // iOS style nice look
+        presentationStyle="pageSheet"
         onRequestClose={() => setCourseModalVisible(false)}
       >
         {selectedCourse && (
             <View className="flex-1 bg-white">
-                
-                {/* Modal Header Image */}
                 <View className="relative">
                     <Image 
                         source={{ uri: selectedCourse.thumbnail }} 
@@ -442,9 +468,7 @@ const Home = () => {
                     </TouchableOpacity>
                 </View>
 
-                {/* Scrollable Content */}
                 <ScrollView className="flex-1 px-5 pt-6" contentContainerStyle={{ paddingBottom: 100 }}>
-                    {/* Title & Badge */}
                     <View className="flex-row justify-between items-start mb-2">
                         <View className="flex-1 pr-4">
                              <Text className="text-orange-600 font-bold text-xs tracking-widest uppercase mb-1">
@@ -454,13 +478,18 @@ const Home = () => {
                                 {selectedCourse.title}
                              </Text>
                         </View>
-                        <View className="items-end">
-                            <Text className="text-xl font-black text-indigo-600">{selectedCourse.price}</Text>
-                            <Text className="text-gray-400 text-xs line-through">₹1999</Text>
-                        </View>
+                        {enrolledCourseIds.includes(selectedCourse.id) ? (
+                            <View className="bg-green-100 px-3 py-1 rounded-lg">
+                                <Text className="text-green-700 font-bold">Purchased</Text>
+                            </View>
+                        ) : (
+                            <View className="items-end">
+                                <Text className="text-xl font-black text-indigo-600">{selectedCourse.price}</Text>
+                                <Text className="text-gray-400 text-xs line-through">₹1999</Text>
+                            </View>
+                        )}
                     </View>
 
-                    {/* Meta Info */}
                     <View className="flex-row items-center mb-6 space-x-4">
                         <View className="flex-row items-center bg-yellow-50 px-2 py-1 rounded-md mr-3">
                              <Text className="text-yellow-500 text-xs">★</Text>
@@ -470,7 +499,6 @@ const Home = () => {
                         <Text className="text-gray-400 text-xs ml-3">📹 {selectedCourse.lessons} Lessons</Text>
                     </View>
 
-                    {/* Author Profile */}
                     <View className="flex-row items-center mb-6 p-3 bg-gray-50 rounded-xl border border-gray-100">
                         <View className="w-10 h-10 bg-indigo-100 rounded-full justify-center items-center mr-3">
                             <Text className="text-indigo-600 font-bold text-lg">{selectedCourse.author.charAt(0)}</Text>
@@ -481,13 +509,11 @@ const Home = () => {
                         </View>
                     </View>
 
-                    {/* Description */}
                     <Text className="text-lg font-bold text-gray-900 mb-2">About Course</Text>
                     <Text className="text-gray-600 leading-6 mb-6">
                         {selectedCourse.description}
                     </Text>
 
-                    {/* What you'll learn (Dummy) */}
                     <Text className="text-lg font-bold text-gray-900 mb-3">What You'll Learn</Text>
                     <View className="bg-gray-50 p-4 rounded-2xl mb-6">
                         {['Master the basics', 'Build Real-world Projects', 'Get Certified', 'Lifetime Access'].map((item, index) => (
@@ -498,15 +524,28 @@ const Home = () => {
                         ))}
                     </View>
 
-                    {/* --- GREEN ENROLL BUTTON (SCROLL END) --- */}
-                    <TouchableOpacity 
-                        activeOpacity={0.8}
-                        className="bg-green-600 py-4 rounded-2xl shadow-lg shadow-green-200 mt-4 mb-8"
-                    >
-                        <Text className="text-white text-center font-bold text-lg tracking-wide">
-                            Enroll Now - {selectedCourse.price}
-                        </Text>
-                    </TouchableOpacity>
+                    {enrolledCourseIds.includes(selectedCourse.id) ? (
+                        <TouchableOpacity 
+                            activeOpacity={0.8}
+                            onPress={handleContinueLearning}
+                            className="bg-indigo-600 py-4 rounded-2xl shadow-lg shadow-indigo-200 mt-4 mb-8 flex-row justify-center items-center"
+                        >
+                            <Text className="text-white text-center font-bold text-lg tracking-wide mr-2">
+                                Continue Learning
+                            </Text>
+                            <Text className="text-white">▶</Text>
+                        </TouchableOpacity>
+                    ) : (
+                        <TouchableOpacity 
+                            activeOpacity={0.8}
+                            onPress={handleEnroll}
+                            className="bg-green-600 py-4 rounded-2xl shadow-lg shadow-green-200 mt-4 mb-8"
+                        >
+                            <Text className="text-white text-center font-bold text-lg tracking-wide">
+                                Enroll Now - {selectedCourse.price}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
 
                 </ScrollView>
             </View>

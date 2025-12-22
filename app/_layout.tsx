@@ -11,10 +11,7 @@ export default function RootLayout() {
           <Stack.Screen name="(auth)" options={{headerShown:false}} />
           <Stack.Screen name="(dashboard)" options={{headerShown:false}} />
           <Stack.Screen name="(videos)" options={{headerShown:false}} />
-<<<<<<< HEAD
           <Stack.Screen name="(student)" options={{headerShown:false}} />
-=======
->>>>>>> 71d40ca63823863c796e69775aea121ff91e47c0
           <Stack.Screen name="(admin)" options={{headerShown:false}} />
         </Stack>
     </LmsContext>
