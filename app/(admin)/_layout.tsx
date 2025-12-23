@@ -159,6 +159,8 @@ export default function AdminLayout() {
         <Drawer.Screen name="Courses" options={{ drawerLabel: 'Courses', title: 'Courses', drawerIcon: ({ color, size }) => <Ionicons name="library-outline" size={size} color={color} /> }} />
         <Drawer.Screen name="BulkQuizUpload" options={{ drawerItemStyle: { display: 'none' }, headerShown: false }} />
         <Drawer.Screen name="Students" options={{ drawerLabel: 'Students', title: 'Students', drawerIcon: ({ color, size }) => <Ionicons name="people-outline" size={size} color={color} /> }} />
+        <Drawer.Screen name="CourseDetails" options={{ drawerItemStyle: { display: 'none' }, headerShown: false }} />
+        <Drawer.Screen name="Courseform" options={{ drawerItemStyle: { display: 'none' }, headerShown: false }} />
       </Drawer>
 
       {/* --- 1. PROFILE DROPDOWN MENU --- */}
