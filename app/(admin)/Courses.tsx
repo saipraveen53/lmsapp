@@ -17,7 +17,6 @@ import "../globals.css";
 
 // --- HELPER: Get Image (Network Fallback) ---
 const getCourseImage = (url: string | null) => {
-  // If no URL from backend, use a high-quality Unsplash tech image
   if (url && url.length > 5) return { uri: url };
   return { uri: "https://images.unsplash.com/photo-1587620962725-abab7fe55159?q=80&w=800&auto=format&fit=crop" };
 };
@@ -28,7 +27,7 @@ export default function Courses() {
   const { width } = useWindowDimensions();
   const router = useRouter();
 
-  // Responsive Logic: 3 cols on Desktop, 2 on Tablet, 1 on Mobile
+  // Responsive Logic
   const isDesktop = width >= 1024;
   const isTablet = width >= 768 && width < 1024;
   const columns = isDesktop ? 3 : isTablet ? 2 : 1;
@@ -36,22 +35,32 @@ export default function Courses() {
   const padding = 24;
   const cardWidth = (width - (padding * 2) - (gap * (columns))) / columns;
 
-  
-useEffect(() => {
-  rootApi.get("http://192.168.0.249:8088/api/courses")
-    .then(res => {
-      setCourses(res.data.data || []);
-    })
-    .catch(() => setCourses([]))
-    .finally(() => setLoading(false));
-}, []);
-
-  const openCreate = () => { /* Modal Logic */ };
+  useEffect(() => {
+    rootApi.get("http://192.168.0.249:8088/api/courses")
+      .then(res => {
+        setCourses(res.data.data || []);
+      })
+      .catch(() => setCourses([]))
+      .finally(() => setLoading(false));
+  }, []);
 
   const openCourseDetails = (course: any) => {
     router.push({
       pathname: "/(admin)/CourseDetails",
       params: { course: JSON.stringify(course) }
+    });
+  };
+
+  // --- UPDATED: Passing Full Course Data ---
+  const openQuizUpload = (course: any) => {
+    router.push({
+        pathname: '/(admin)/BulkQuizUpload',
+        params: { 
+            courseId: course.courseId, 
+            courseName: course.title,
+            // We pass the full course object stringified to access sections/lectures
+            courseData: JSON.stringify(course) 
+        } 
     });
   };
 
@@ -96,14 +105,8 @@ useEffect(() => {
                   className="bg-white rounded-2xl shadow-sm shadow-slate-200 border border-slate-100 overflow-hidden group hover:shadow-md transition-all"
                   style={{ width: cardWidth }}
                 >
-                  {/* Thumbnail Image */}
                   <View className="h-48 relative bg-slate-100">
-                    <Image
-                      source={getCourseImage(c.thumbnailUrl)}
-                      className="w-full h-full"
-                      resizeMode="cover"
-                    />
-                    {/* Status Badge (Top Right) */}
+                    <Image source={getCourseImage(c.thumbnailUrl)} className="w-full h-full" resizeMode="cover" />
                     <View className="absolute top-3 right-3">
                        <View className={`px-2.5 py-1 rounded-md backdrop-blur-md ${c.isFree ? 'bg-emerald-500' : 'bg-slate-900'}`}>
                           <Text className="text-[10px] font-bold text-white uppercase tracking-wide">
@@ -113,7 +116,6 @@ useEffect(() => {
                     </View>
                   </View>
 
-                  {/* Card Body */}
                   <View className="p-5">
                     <View className="flex-row justify-between items-start mb-2">
                       <Text className="text-lg font-bold text-slate-800 leading-6 flex-1 mr-2" numberOfLines={1}>
@@ -125,7 +127,6 @@ useEffect(() => {
                       {c.description || "No description provided."}
                     </Text>
 
-                    {/* Stats Row */}
                     <View className="flex-row items-center gap-4 mb-4 pb-4 border-b border-slate-50">
                         <View className="flex-row items-center">
                            <Ionicons name="book-outline" size={14} color="#94a3b8" />
@@ -137,18 +138,16 @@ useEffect(() => {
                         </View>
                     </View>
 
-                    {/* Action Buttons */}
                     <View className="flex-row gap-2">
-                       {/* Upload Quiz Button */}
+                      {/* UPDATED: Calls openQuizUpload */}
                       <Pressable
-                        onPress={() => router.push({ pathname: '/(admin)/BulkQuizUpload', params: { courseId: c.courseId, courseName: c.title } })}
+                        onPress={() => openQuizUpload(c)} 
                         className="flex-1 bg-indigo-50 py-2.5 rounded-lg flex-row items-center justify-center border border-indigo-100"
                       >
                         <Ionicons name="cloud-upload-outline" size={14} color="#4f46e5" />
-                        <Text className="text-indigo-700 font-bold text-xs ml-1.5">Upload Quiz</Text>
+                        <Text className="text-indigo-700 font-bold text-xs ml-1.5">Upload Quiz / Grand Test</Text>
                       </Pressable>
                       
-                      {/* Delete Button */}
                       <Pressable className="w-10 bg-rose-50 rounded-lg items-center justify-center border border-rose-100">
                         <Ionicons name="trash-outline" size={16} color="#e11d48" />
                       </Pressable>

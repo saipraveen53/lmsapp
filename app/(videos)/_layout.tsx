@@ -5,7 +5,7 @@ const Videoslayout = () => {
   return (
     <Stack >
         <Stack.Screen name='Video'  options={{headerShown:true}} />
-        <Stack.Screen name='[id]'  options={{headerShown:true,headerTitle:"Videosss"}} />
+        <Stack.Screen name='[id]'  options={{headerShown:false}} />
     </Stack>
   )
 }
