@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router'; // Added useRouter for back navigation
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -38,7 +38,7 @@ interface VideoItem {
 }
 
 const VideoListByLibrary = () => {
-  const { id } = useLocalSearchParams(); // This 'id' is now the videoLibraryId passed from Home
+  const { id } = useLocalSearchParams(); 
   const router = useRouter();
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,7 +47,6 @@ const VideoListByLibrary = () => {
   const scrollY = useRef(new Animated.Value(0)).current;
 
   // --- FILTER LOGIC ---
-  // Remove currently playing video from the list
   const displayedVideos = currentVideo 
     ? videos.filter(v => v.guid !== currentVideo) 
     : videos;
@@ -70,13 +69,12 @@ const VideoListByLibrary = () => {
       if (!id) return;
 
       try {
-        // UPDATED: Using dynamic 'id' (Library ID) instead of hardcoded value
         const response = await fetch(
           `https://video.bunnycdn.com/library/${id}/videos`, 
           {
             method: "GET",
             headers: {
-              AccessKey: "ede9a48d-c2a3-425b-ac0d96863d1b-f95c-4f46", // Consider moving this to env variables
+              AccessKey: "ede9a48d-c2a3-425b-ac0d96863d1b-f95c-4f46", 
               Accept: "application/json",
             },
           }
@@ -102,7 +100,6 @@ const VideoListByLibrary = () => {
   const renderPlayer = () => {
     if (!currentVideo) return null;
 
-    // Using dynamic 'id' for the embed URL as well
     const embedUrl = `https://iframe.mediadelivery.net/embed/${id}/${currentVideo}?autoplay=true`;
 
     return (
@@ -165,7 +162,7 @@ const VideoListByLibrary = () => {
         </View>
       )}
 
-      {/* 3. VIDEO LIST (Filtered) */}
+      {/* 3. VIDEO LIST (Compact Mode) */}
       <Animated.FlatList
         data={displayedVideos} 
         keyExtractor={(item) => item.guid}
@@ -176,8 +173,7 @@ const VideoListByLibrary = () => {
             { useNativeDriver: true }
         )}
         renderItem={({ item, index }) => {
-          // Opacity Animation
-          const inputRange = [ -1, 0, (250 * index), (250 * (index + 2)) ];
+          const inputRange = [ -1, 0, (100 * index), (100 * (index + 2)) ]; // Adjusted for smaller items
           const opacity = scrollY.interpolate({
              inputRange,
              outputRange: [1, 1, 1, 0.8]
@@ -186,31 +182,28 @@ const VideoListByLibrary = () => {
           return (
             <Animated.View style={{ opacity }}>
                 <TouchableOpacity 
-                  activeOpacity={0.9}
+                  activeOpacity={0.7}
                   onPress={() => handleVideoPress(item.guid)}
                   style={styles.card}
                 >
-                  {/* --- STATIC THUMBNAIL --- */}
+                  {/* --- COMPACT THUMBNAIL (Left Side) --- */}
                   <View style={styles.thumbnailContainer}>
-                     {/* You might want to use item.thumbnailFileName if available, constructed with CDN URL */}
                      <Image 
                         source={{ uri: "https://img.freepik.com/free-vector/gradient-ui-ux-background_23-2149052117.jpg" }} 
                         style={styles.thumbnailImage}
                         resizeMode="cover"
                      />
                      
-                     {/* Play Icon Overlay */}
                      <View style={styles.playIconOverlay}>
-                        <Ionicons name="play-circle" size={40} color="rgba(255,255,255,0.9)" />
+                        <Ionicons name="play-circle" size={28} color="rgba(255,255,255,0.9)" />
                      </View>
 
-                     {/* Duration Badge */}
                      <View style={styles.durationBadge}>
                         <Text style={styles.durationText}>{formatDuration(item.length)}</Text>
                      </View>
                   </View>
 
-                  {/* --- CONTENT DETAILS --- */}
+                  {/* --- CONTENT DETAILS (Right Side) --- */}
                   <View style={styles.cardContent}>
                     <View style={styles.textContainer}>
                         <Text style={styles.videoTitle} numberOfLines={2}>
@@ -224,9 +217,10 @@ const VideoListByLibrary = () => {
                         </View>
                     </View>
 
-                    <TouchableOpacity style={styles.optionsButton}>
+                    {/* Options (Optional) */}
+                    {/* <TouchableOpacity style={styles.optionsButton}>
                         <Ionicons name="ellipsis-vertical" size={16} color="#94a3b8" />
-                    </TouchableOpacity>
+                    </TouchableOpacity> */}
                   </View>
                   
                   {/* Status Indicator */}
@@ -251,7 +245,7 @@ const VideoListByLibrary = () => {
   );
 };
 
-// --- STYLES ---
+// --- STYLES (UPDATED FOR COMPACT LAYOUT) ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -269,16 +263,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 12,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9',
+    backgroundColor: '#fff',
   },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: '800',
+    fontSize: 20,
+    fontWeight: 'bold',
     color: '#0f172a',
-    marginRight: 8,
   },
 
   // Player
@@ -293,38 +286,38 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
   closeButton: {
-    paddingVertical: 12,
+    paddingVertical: 10,
     alignItems: 'center',
     backgroundColor: '#1e293b',
-    flexDirection: 'row',
-    justifyContent: 'center',
   },
   closeText: {
     color: '#fff',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
-    letterSpacing: 0.5,
   },
 
   // List
   listContent: {
-    paddingBottom: 40,
-  },
-  card: {
-    backgroundColor: '#fff',
-    marginBottom: 20, 
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-    paddingBottom: 16,
+    paddingVertical: 10,
   },
   
-  // Thumbnail
+  // --- COMPACT CARD STYLES ---
+  card: {
+    flexDirection: 'row', // Horizontal Layout
+    backgroundColor: '#fff',
+    marginBottom: 12, 
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  
+  // Smaller Thumbnail on Left
   thumbnailContainer: {
-    width: '100%',
-    aspectRatio: 16 / 9,
+    width: 130, // Fixed small width
+    height: 74, // Approx 16:9
+    borderRadius: 8,
     position: 'relative',
-    marginBottom: 12,
     backgroundColor: '#f1f5f9',
+    overflow: 'hidden',
   },
   thumbnailImage: {
     width: '100%',
@@ -332,45 +325,41 @@ const styles = StyleSheet.create({
   },
   playIconOverlay: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    inset: 0,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.1)',
   },
   durationBadge: {
     position: 'absolute',
-    bottom: 8,
-    right: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 4,
+    bottom: 4,
+    right: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 3,
   },
   durationText: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
   },
 
-  // Content Details
+  // Content Details on Right
   cardContent: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flex: 1,
+    marginLeft: 12,
+    justifyContent: 'center',
+    paddingVertical: 4,
   },
   textContainer: {
     flex: 1,
-    marginRight: 12,
   },
   videoTitle: {
-    fontSize: 16,
+    fontSize: 14, // Smaller font
     fontWeight: '600',
     color: '#0f172a',
-    lineHeight: 22,
+    lineHeight: 18,
     marginBottom: 4,
   },
   metaRow: {
@@ -378,7 +367,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   metaText: {
-    fontSize: 12,
+    fontSize: 11, // Smaller meta text
     color: '#64748b', 
   },
   optionsButton: {
@@ -388,15 +377,17 @@ const styles = StyleSheet.create({
   // Processing Status
   processingOverlay: {
     position: 'absolute',
-    top: 8,
-    left: 8,
-    backgroundColor: 'rgba(59, 130, 246, 0.9)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 8,
   },
   processingText: {
-    color: '#fff',
+    color: '#2563eb',
     fontSize: 10,
     fontWeight: 'bold',
   },
@@ -404,13 +395,12 @@ const styles = StyleSheet.create({
   // Empty State
   emptyContainer: {
     alignItems: 'center',
-    marginTop: 100,
+    marginTop: 80,
   },
   emptyText: {
-    marginTop: 16,
+    marginTop: 12,
     color: '#94a3b8',
-    fontSize: 16,
-    fontWeight: '500',
+    fontSize: 14,
   },
 });
 
