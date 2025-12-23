@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   DrawerContentComponentProps,
   DrawerContentScrollView,
@@ -24,16 +23,17 @@ import {
   View
 } from 'react-native';
 import api from '../(utils)/api';
+import { useLms } from '../(utils)/LmsContext'; // Import useLms
 import "../globals.css";
 
 const logoImg = require('../../assets/images/anasol-logo.png');
 
 // --- DRAWER CONTENT ---
 const CustomDrawerContent = (props: DrawerContentComponentProps) => {
-  const router = useRouter();
+  const { logout } = useLms(); // Get logout function from Context
+
   const handleLogout = async () => {
-    await AsyncStorage.removeItem('userToken');
-    router.replace('/');
+    await logout(); // Calls API and clears correct token
   };
 
   return (
@@ -49,7 +49,13 @@ const CustomDrawerContent = (props: DrawerContentComponentProps) => {
         <View className="px-2"><DrawerItemList {...props} /></View>
       </DrawerContentScrollView>
       <View className="p-4 border-t border-gray-100 pb-8">
-        <DrawerItem label="Sign Out" labelStyle={{ color: '#e11d48', fontWeight: 'bold', marginLeft: -10 }} icon={({ size }) => <Ionicons name="log-out-outline" size={size} color="#e11d48" />} onPress={handleLogout} style={{ borderRadius: 12, backgroundColor: '#fff1f2' }} />
+        <DrawerItem 
+            label="Sign Out" 
+            labelStyle={{ color: '#e11d48', fontWeight: 'bold', marginLeft: -10 }} 
+            icon={({ size }) => <Ionicons name="log-out-outline" size={size} color="#e11d48" />} 
+            onPress={handleLogout} 
+            style={{ borderRadius: 12, backgroundColor: '#fff1f2' }} 
+        />
       </View>
     </View>
   );
@@ -58,6 +64,7 @@ const CustomDrawerContent = (props: DrawerContentComponentProps) => {
 // --- MAIN LAYOUT ---
 export default function AdminLayout() {
   const router = useRouter();
+  const { logout } = useLms(); // Get logout function from Context
   
   // State for Menus & Modals
   const [menuVisible, setMenuVisible] = useState(false); 
@@ -98,7 +105,7 @@ export default function AdminLayout() {
         const response = await api.post('/api/auth/change-password', { 
            oldPassword: passData.old, 
            newPassword: passData.new,
-           confirmPassword: passData.confirm  // ADDED THIS FIELD
+           confirmPassword: passData.confirm 
         });
         
         console.log("API Success:", response.data);
@@ -109,7 +116,6 @@ export default function AdminLayout() {
         setPassData({ old: '', new: '', confirm: '' });
     } catch (error: any) {
         console.log("Change Pass Error:", error.response?.data);
-        // Display Backend Error Message (e.g., "Incorrect old password")
         const msg = error.response?.data?.message || "Failed to update password. Please try again.";
         Alert.alert("Update Failed", msg);
     } finally {
@@ -170,7 +176,11 @@ export default function AdminLayout() {
                     <Text className="ml-3 text-gray-700 font-medium">Change Password</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity onPress={() => { setMenuVisible(false); AsyncStorage.removeItem('userToken'); router.replace('/'); }} className="flex-row items-center px-4 py-3 active:bg-gray-50 border-t border-gray-50">
+                {/* LOGOUT BUTTON - Updated to use Context */}
+                <TouchableOpacity 
+                    onPress={() => { setMenuVisible(false); logout(); }} 
+                    className="flex-row items-center px-4 py-3 active:bg-gray-50 border-t border-gray-50"
+                >
                     <Ionicons name="log-out-outline" size={18} color="#e11d48" />
                     <Text className="ml-3 text-rose-600 font-medium">Logout</Text>
                 </TouchableOpacity>
@@ -209,7 +219,6 @@ export default function AdminLayout() {
                                 onChangeText={(t) => setPassData({...passData, old: t})}
                                 placeholder="Enter old password"
                                 className="flex-1 text-gray-800 text-sm h-full"
-                                // FIX: Removes black border on Web
                                 style={{ outlineStyle: 'none' } as any}
                             />
                             <TouchableOpacity onPress={() => setShowOld(!showOld)} style={{ padding: 5 }}>
