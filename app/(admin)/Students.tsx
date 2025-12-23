@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import React, { useMemo, useState } from "react";
 import { Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from "react-native";
 
@@ -80,15 +79,10 @@ export default function Students() {
   return (
     <View style={styles.container}>
       {/* Header with Gradient */}
-      <LinearGradient
-        colors={["#7c3aed", "#db2777", "#ea580c"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
-      >
-        <Text style={styles.headerTitle}>Students</Text>
-        <Text style={styles.headerSubtitle}>Manage and view all enrolled students</Text>
-      </LinearGradient>
+      <View style={styles.header}>
+        {/*<Text style={styles.headerTitle}>Students</Text>*/}
+        {/*<Text style={styles.headerSubtitle}>Manage and view all enrolled students</Text>*/}
+      </View>
 
       {/* Stats Row */}
       <View style={styles.statsRow}>
@@ -132,7 +126,7 @@ export default function Students() {
               key={s.id}
               style={[
                 styles.card,
-                { width: (width - 48 - (columns - 1) * 20) / columns },
+                { width: (width - 48 - (columns) * 20) / columns },
               ]}
             >
               <View style={styles.cardHeader}>
@@ -176,27 +170,21 @@ const styles = StyleSheet.create({
     backgroundColor: "#f8fafc",
   },
   header: {
-    paddingTop: 48,
     paddingBottom: 40,
     paddingHorizontal: 24,
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
     alignItems: "flex-start",
-    shadowColor: "#7c3aed",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    elevation: 8,
   },
   headerTitle: {
-    color: "#fff",
+    color: "black",
     fontSize: 32,
     fontWeight: "bold",
     letterSpacing: 1,
     marginBottom: 6,
   },
   headerSubtitle: {
-    color: "#f3e8ff",
+    color: "black",
     fontSize: 15,
     fontWeight: "500",
     letterSpacing: 0.2,
@@ -204,17 +192,17 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: -28,
-    marginBottom: 18,
-    marginHorizontal: 24,
+    marginTop: -30,
+    marginBottom: 20,
+    marginHorizontal: 15,
     zIndex: 2,
   },
   statCard: {
     flex: 1,
-    marginHorizontal: 6,
-    borderRadius: 16,
+    marginHorizontal: 3,
+    borderRadius: 18,
     alignItems: "center",
-    paddingVertical: 18,
+    paddingVertical: 5,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,

@@ -1,20 +1,29 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { LinearGradient } from "expo-linear-gradient";
-import jwtDecode from "jwt-decode";
+import { jwtDecode } from "jwt-decode";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Image,
   SafeAreaView,
   ScrollView,
+  StatusBar,
   Text,
+  TouchableOpacity,
   useWindowDimensions,
-  View,
+  View
 } from "react-native";
-import "../globals.css";
+// import "../globals.css"; // Ensure this is uncommented in your project
 
-// Same Data ...
-type Course = { courseId: string; name: string; thumbnailUrl?: string; price?: number; isPaid: boolean; videos?: number; status: "active" | "inactive"; };
+// --- TYPES & DATA (UNCHANGED) ---
+type Course = {
+  courseId: string;
+  name: string;
+  thumbnailUrl?: string;
+  price?: number;
+  isPaid: boolean;
+  videos?: number;
+  status: "active" | "inactive";
+};
 const sampleCourses: Course[] = [
   { courseId: "C001", name: "Intro to React", thumbnailUrl: "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800&q=60", price: 0, isPaid: false, videos: 8, status: "active" },
   { courseId: "C002", name: "Advanced TypeScript", thumbnailUrl: "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=800&q=60", price: 49, isPaid: true, videos: 15, status: "active" },
@@ -27,26 +36,31 @@ export default function Dashboard() {
   const isDesktop = width >= 1024;
   const isTablet = width >= 768 && width < 1024;
 
-  // Layout Logic
-  // Desktop: 4 cards (gap handled via calc or style), Tablet: 2 cards, Mobile: 1 card (or 2 small)
-  let cardWidth = "100%"; 
-  if (isDesktop) cardWidth = "23.5%"; // 4 columns
-  else if (isTablet) cardWidth = "48%"; // 2 columns
-  else cardWidth = "48%"; // 2 columns on mobile too for tighter look, or 100%
+  // Responsive Layout Logic
+  const gap = 20;
+  const containerPadding = 30;
+  const availableWidth = width - (containerPadding * 2);
+
+  let cardWidth = 0;
+  if (isDesktop) {
+    // 4 columns: (Total - 3 gaps) / 4
+    cardWidth = (availableWidth - (gap * 4)) / 4  ;
+  } else if (isTablet) {
+    // 2 columns: (Total - 1 gap) / 2
+    cardWidth = (availableWidth - gap) / 2;
+  } else {
+    // Mobile: 2 columns for density, or change to 1 for full width
+    // Let's do 2 columns for mobile to make it look like a dashboard
+    cardWidth = (availableWidth - gap) / 2;
+  }
 
   const stats = useMemo(() => {
     return { totalCourses: sampleCourses.length, totalVideos: 53, totalStudents: 1248, paid: 2, free: 2 };
   }, []);
 
-  const cardWidth = width >= 1000 ? "23%" : "47%";
-
   const [username, setUserName] = useState("Admin");
-  const logoImg = require('../../assets/images/anasol-logo.png');
-  // The Gradient Colors extracted from the image
-  // Purple -> Pink/Red -> Orange
-  const BRAND_GRADIENT = ['#7c3aed', '#db2777', '#ea580c'] as const;
 
-   useEffect(() => {
+  useEffect(() => {
     const fetchUsername = async () => {
       try {
         const token = await AsyncStorage.getItem("accessToken");
@@ -60,64 +74,188 @@ export default function Dashboard() {
     };
     fetchUsername();
   }, []);
+
+  const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
-      <ScrollView contentContainerStyle={{ padding: 20 }}>
+      <StatusBar barStyle="dark-content" backgroundColor="#f8fafc" />
+      
+      <ScrollView contentContainerStyle={{ padding: containerPadding, paddingBottom: 40 }}>
         
-        {/* Welcome Banner */}
-        <View className="mb-8">
-            <Text className="text-3xl font-bold text-slate-800">Hello, Admin 👋</Text>
-            <Text className="text-slate-500">Here's what's happening in your academy today.</Text>
-        </View>
-
-        {/* Stats Cards - Updated with Gradient Icons */}
-        <View className="flex-row flex-wrap justify-between mb-6">
-          <StatCard title="Total Courses" value={stats.totalCourses} icon="library" color1="#4f46e5" color2="#818cf8" width={cardWidth} />
-          <StatCard title="Total Students" value={stats.totalStudents} icon="people" color1="#e11d48" color2="#fb7185" width={cardWidth} />
-          <StatCard title="Total Videos" value={stats.totalVideos} icon="play-circle" color1="#f97316" color2="#fdba74" width={cardWidth} />
-          <StatCard title="Revenue" value="$4.2k" icon="cash" color1="#10b981" color2="#34d399" width={cardWidth} />
-        </View>
-
-        {/* Top Courses List */}
-        <View className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-          <Text className="text-lg font-bold text-slate-800 mb-4">Recent Courses</Text>
-          {sampleCourses.map((c) => (
-             <View key={c.courseId} className="flex-row items-center justify-between mb-4 pb-4 border-b border-slate-50 last:border-0 last:mb-0 last:pb-0">
-                <View className="flex-row items-center flex-1">
-                   <Image 
-                      source={{ uri: c.thumbnailUrl || "https://via.placeholder.com/100" }} 
-                      className="w-12 h-12 rounded-lg bg-slate-200 mr-3"
-                   />
-                   <View>
-                      <Text className="font-bold text-slate-700">{c.name}</Text>
-                      <Text className="text-xs text-slate-400">{c.videos} Videos • {c.status}</Text>
-                   </View>
+        {/* HEADER SECTION */}
+        <View className="flex-row justify-between items-end mb-8">
+          <View>
+            <Text className="text-xs font-bold text-indigo-500 uppercase tracking-wider mb-1">
+              {currentDate}
+            </Text>
+            <Text className="text-3xl font-extrabold text-slate-800">
+              Hello, {username} <Text className="text-yellow-500">👋</Text>
+            </Text>
+            <Text className="text-slate-500 mt-1 text-base">
+              Here's your academy performance overview.
+            </Text>
+          </View>
+          
+          {/* Only show profile pic/action on Tablet/Desktop to save space on mobile */}
+          {/*{(isDesktop || isTablet) && (
+             <View className="flex-row items-center space-x-3">
+                <View className="bg-white p-2 rounded-full shadow-sm border border-slate-200">
+                    <Ionicons name="notifications-outline" size={20} color="#64748b" />
                 </View>
-                <View className={`px-2 py-1 rounded text-xs ${c.isPaid ? 'bg-indigo-50' : 'bg-green-50'}`}>
-                    <Text className={`text-xs font-bold ${c.isPaid ? 'text-indigo-600' : 'text-green-600'}`}>
-                        {c.isPaid ? `$${c.price}` : 'FREE'}
-                    </Text>
+                <View className="h-10 w-10 bg-indigo-100 rounded-full items-center justify-center border border-indigo-200">
+                    <Text className="text-indigo-700 font-bold text-lg">{username.charAt(0).toUpperCase()}</Text>
                 </View>
              </View>
-          ))}
+          )}*/}
+        </View>
+
+        {/* STATS GRID */}
+        <View className="flex-row flex-wrap" style={{ gap: gap }}>
+          <StatCard 
+            title="Total Courses" 
+            value={stats.totalCourses} 
+            icon="school-outline" 
+            theme="indigo"
+            width={cardWidth} 
+          />
+          <StatCard 
+            title="Active Students" 
+            value={stats.totalStudents} 
+            icon="people-outline" 
+            theme="rose"
+            width={cardWidth} 
+          />
+          <StatCard 
+            title="Content Library" 
+            value={`${stats.totalVideos} Videos`} 
+            icon="play-circle-outline" 
+            theme="orange"
+            width={cardWidth} 
+          />
+          <StatCard 
+            title="Total Revenue" 
+            value="$4,250" 
+            icon="wallet-outline" 
+            theme="emerald"
+            width={cardWidth} 
+          />
+        </View>
+
+        {/* RECENT COURSES SECTION */}
+        <View className="mt-8">
+          <View className="flex-row items-center justify-between mb-5">
+            <Text className="text-xl font-bold text-slate-800">Recent Courses</Text>
+            <TouchableOpacity>
+              <Text className="text-indigo-600 font-semibold text-sm">View All</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            {sampleCourses.map((c, index) => (
+              <View 
+                key={c.courseId} 
+                className={`p-4 flex-row items-center justify-between ${
+                  index !== sampleCourses.length - 1 ? 'border-b border-slate-50' : ''
+                } hover:bg-slate-50 transition-colors`}
+              >
+                {/* Left Side: Image & Text */}
+                <View className="flex-row items-center flex-1 mr-4">
+                  <View className="relative shadow-sm">
+                    {c.thumbnailUrl ? (
+                      <Image 
+                        source={{ uri: c.thumbnailUrl }} 
+                        className="w-14 h-14 rounded-xl"
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View className="w-14 h-14 rounded-xl bg-slate-100 items-center justify-center border border-slate-200">
+                        <Ionicons name="image-outline" size={24} color="#cbd5e1" />
+                      </View>
+                    )}
+                    {/* Status Dot */}
+                    <View className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${c.status === 'active' ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                  </View>
+
+                  <View className="ml-4 flex-1">
+                    <Text className="font-bold text-slate-700 text-base" numberOfLines={1}>
+                      {c.name}
+                    </Text>
+                    <View className="flex-row items-center mt-1">
+                       <Ionicons name="film-outline" size={12} color="#94a3b8" />
+                       <Text className="text-xs text-slate-500 ml-1 mr-3">{c.videos} Lessons</Text>
+                       {isDesktop && (
+                         <Text className={`text-xs capitalize font-medium ${c.status === 'active' ? 'text-emerald-600' : 'text-slate-400'}`}>
+                           ● {c.status}
+                         </Text>
+                       )}
+                    </View>
+                  </View>
+                </View>
+
+                {/* Right Side: Price & Tag */}
+                <View className="items-end">
+                   <Text className="font-bold text-slate-800 text-base mb-1">
+                      {c.price === 0 ? "Free" : `$${c.price}`}
+                   </Text>
+                   <View className={`px-2 py-0.5 rounded-md ${c.isPaid ? 'bg-indigo-50' : 'bg-emerald-50'}`}>
+                      <Text className={`text-[10px] font-bold uppercase tracking-wide ${c.isPaid ? 'text-indigo-600' : 'text-emerald-600'}`}>
+                         {c.isPaid ? 'Premium' : 'Free'}
+                      </Text>
+                   </View>
+                </View>
+              </View>
+            ))}
+          </View>
         </View>
 
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
-const StatCard = ({ title, value, icon, color1, color2, width }: any) => (
-    <View style={{ width: width }} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 mb-4">
-        <View className="flex-row justify-between items-start mb-2">
-            <View className="p-2 rounded-lg" style={{ backgroundColor: color2 + '20' }}>
-                 <Ionicons name={icon} size={22} color={color1} />
+// --- HELPER COMPONENTS ---
+
+// Helper to map theme names to specific hex colors/classes
+const getThemeColors = (theme: string) => {
+    switch (theme) {
+        case 'indigo': return { bg: '#e0e7ff', icon: '#4f46e5', trend: 'text-indigo-600', trendBg: 'bg-indigo-50' };
+        case 'rose': return { bg: '#ffe4e6', icon: '#e11d48', trend: 'text-rose-600', trendBg: 'bg-rose-50' };
+        case 'orange': return { bg: '#ffedd5', icon: '#f97316', trend: 'text-orange-600', trendBg: 'bg-orange-50' };
+        case 'emerald': return { bg: '#d1fae5', icon: '#10b981', trend: 'text-emerald-600', trendBg: 'bg-emerald-50' };
+        default: return { bg: '#f1f5f9', icon: '#64748b', trend: 'text-slate-600', trendBg: 'bg-slate-50' };
+    }
+}
+
+const StatCard = ({ title, value, icon, theme, trend, width }: any) => {
+    const colors = getThemeColors(theme);
+    
+    return (
+        <View 
+            style={{ width: width }} 
+            className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex-col justify-between"
+        >
+            <View className="flex-row justify-between items-start mb-4">
+                <View 
+                    style={{ backgroundColor: colors.bg }} 
+                    className="w-10 h-10 rounded-full items-center justify-center"
+                >
+                     <Ionicons name={icon} size={20} color={colors.icon} />
+                </View>
+                
+                {trend && (
+                    <View className={`px-2 py-1 rounded-full ${colors.trendBg}`}>
+                        <Text className={`text-[10px] font-bold ${colors.trend}`}>
+                           ↗ {trend}
+                        </Text>
+                    </View>
+                )}
             </View>
-            <Text className="text-xs font-bold text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded">
-                +12%
-            </Text>
+            
+            <View>
+                <Text className="text-2xl font-bold text-slate-800 tracking-tight">{value}</Text>
+                <Text className="text-sm text-slate-500 font-medium mt-1">{title}</Text>
+            </View>
         </View>
-        <Text className="text-2xl font-bold text-slate-800">{value}</Text>
-        <Text className="text-xs text-slate-500 font-medium">{title}</Text>
-    </View>
-);
+    );
+};

@@ -1,104 +1,163 @@
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from 'expo-linear-gradient'; // Import Gradient
+import axios from "axios";
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Image,
   Pressable,
   SafeAreaView,
-  ScrollView, Text,
-  View, useWindowDimensions
+  ScrollView,
+  Text,
+  View,
+  useWindowDimensions
 } from "react-native";
 import "../globals.css";
 
-// ... Keep your Types & Sample Data same as previous file ...
-// (Omitting dummy data to save space, paste your sampleCourses here)
-const sampleCourses = [
-  { courseId: "C001", name: "Intro to React", description: "Basics of React.", thumbnailUrl: "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800&q=60", price: 0, isPaid: false, status: "active", createdAt: new Date().toISOString() },
-  { courseId: "C002", name: "Advanced TS", description: "Deep dive into types.", thumbnailUrl: "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=800&q=60", price: 49, isPaid: true, status: "active", createdAt: new Date().toISOString() },
-];
+// --- HELPER: Get Image (Network Fallback) ---
+const getCourseImage = (url: string | null) => {
+  // If no URL from backend, use a high-quality Unsplash tech image
+  if (url && url.length > 5) return { uri: url };
+  return { uri: "https://images.unsplash.com/photo-1587620962725-abab7fe55159?q=80&w=800&auto=format&fit=crop" };
+};
 
 export default function Courses() {
-  const [courses, setCourses] = useState<any[]>(sampleCourses);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [editingCourse, setEditingCourse] = useState<any>(null);
-  const [form, setForm] = useState<any>({});
+  const [courses, setCourses] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const { width } = useWindowDimensions();
   const router = useRouter();
 
-  const columns = width >= 720 ? 2 : 1;
-  const cardWidth = (width - 48 - (16 * (columns - 1))) / columns;
+  // Responsive Logic: 3 cols on Desktop, 2 on Tablet, 1 on Mobile
+  const isDesktop = width >= 1024;
+  const isTablet = width >= 768 && width < 1024;
+  const columns = isDesktop ? 3 : isTablet ? 2 : 1;
+  const gap = 20;
+  const padding = 24;
+  const cardWidth = (width - (padding * 2) - (gap * (columns - 1))) / columns;
 
-  // ... Keep openCreate, openEdit, handleSave logic same ...
-  const openCreate = () => { setEditingCourse(null); setForm({}); setModalVisible(true); };
+  useEffect(() => {
+    axios.get("http://192.168.0.249:8088/api/courses")
+      .then(res => {
+        setCourses(res.data.data || []);
+      })
+      .catch(() => setCourses([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const openCreate = () => { /* Modal Logic */ };
+
+  const openCourseDetails = (course: any) => {
+    router.push({
+      pathname: "/(admin)/CourseDetails",
+      params: { course: JSON.stringify(course) }
+    });
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
-      <View className="flex-1 p-6">
-        {/* Header */}
-        <View className="flex-row items-center justify-between mb-6">
+      <View className="flex-1 px-6 pt-6">
+        
+        {/* --- Header Section --- */}
+        <View className="flex-row items-center justify-between mb-8">
           <View>
-            <Text className="text-2xl font-bold text-slate-800">Courses</Text>
-            <Text className="text-sm text-slate-500">Manage catalogue</Text>
+            <Text className="text-3xl font-extrabold text-slate-900 tracking-tight">Courses</Text>
+            <Text className="text-sm font-medium text-slate-500 mt-1">Manage your academy content</Text>
           </View>
-          <Pressable onPress={openCreate}>
+          
+          <Pressable onPress={() => router.push("/(admin)/Courseform")} className="active:opacity-90">
             <LinearGradient
-                colors={['#4338ca', '#6366f1']}
-                start={{x:0, y:0}} end={{x:1, y:0}}
-                className="flex-row items-center px-4 py-2.5 rounded-xl shadow-lg shadow-indigo-200"
+              colors={['#4f46e5', '#7c3aed']}
+              start={{x:0, y:0}} end={{x:1, y:1}}
+              className="flex-row items-center px-5 py-3 rounded-xl shadow-lg shadow-indigo-200"
             >
-                <Ionicons name="add-circle-outline" size={20} color="#fff" />
-                <Text className="text-white font-bold ml-2">New Course</Text>
+              <Ionicons name="add" size={20} color="#fff" />
+              <Text className="text-white font-bold ml-2 text-sm">New Course</Text>
             </LinearGradient>
           </Pressable>
         </View>
 
-        <ScrollView contentContainerStyle={{ paddingBottom: 80 }} showsVerticalScrollIndicator={false}>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 16 }}>
-            {courses.map((c) => (
-              <View key={c.courseId} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100" style={{ width: cardWidth }}>
-                {/* Thumbnail */}
-                <View className="h-40 mb-3 rounded-xl overflow-hidden bg-slate-100 relative">
-                  <Image source={{ uri: c.thumbnailUrl }} className="w-full h-full" resizeMode="cover" />
-                  <View className="absolute top-2 right-2 bg-white/90 px-2 py-1 rounded text-xs font-bold">
-                    <Text className="text-[10px] font-bold text-slate-800">{c.isPaid ? 'PAID' : 'FREE'}</Text>
-                  </View>
-                </View>
-
-                <Text className="text-lg font-bold text-slate-800 mb-1">{c.name}</Text>
-                <Text className="text-sm text-slate-500 mb-4" numberOfLines={2}>{c.description}</Text>
-
-                {/* --- ACTION: UPLOAD QUIZ (Gradient Border Button) --- */}
-                <Pressable
-                  onPress={() => router.push({ pathname: '/(admin)/BulkQuizUpload', params: { courseId: c.courseId, courseName: c.name } })}
-                >
-                  <LinearGradient
-                    colors={['#fdf4ff', '#eef2ff']} // Very light gradient bg
-                    className="border border-indigo-200 p-3 rounded-xl flex-row items-center justify-center mb-3"
-                  >
-                     <View className="bg-indigo-100 p-1.5 rounded-full mr-2">
-                        <Ionicons name="cloud-upload" size={14} color="#4338ca" />
-                     </View>
-                     <Text className="text-indigo-700 font-bold text-sm">Upload Quiz / Test</Text>
-                  </LinearGradient>
-                </Pressable>
-
-                <View className="flex-row gap-2 mt-auto">
-                    <Pressable className="flex-1 bg-slate-100 py-2 rounded-lg items-center" onPress={() => {}}>
-                        <Text className="text-slate-600 font-bold text-xs">Edit</Text>
-                    </Pressable>
-                    <Pressable className="flex-1 bg-rose-50 py-2 rounded-lg items-center" onPress={() => {}}>
-                        <Text className="text-rose-600 font-bold text-xs">Delete</Text>
-                    </Pressable>
-                </View>
-              </View>
-            ))}
+        {/* --- Content Grid --- */}
+        {loading ? (
+          <View className="flex-1 justify-center items-center">
+            <ActivityIndicator size="large" color="#4f46e5" />
           </View>
-        </ScrollView>
-        
-        {/* Modal Logic (Hidden for brevity - keep your existing modal code) */}
-        {/* ... Paste your Modal code here ... */}
-        
+        ) : (
+          <ScrollView 
+            contentContainerStyle={{ paddingBottom: 100 }} 
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: gap }}>
+              {courses.map((c) => (
+                <Pressable
+                  key={c.courseId}
+                  onPress={() => openCourseDetails(c)}
+                  className="bg-white rounded-2xl shadow-sm shadow-slate-200 border border-slate-100 overflow-hidden group hover:shadow-md transition-all"
+                  style={{ width: cardWidth }}
+                >
+                  {/* Thumbnail Image */}
+                  <View className="h-48 relative bg-slate-100">
+                    <Image
+                      source={getCourseImage(c.thumbnailUrl)}
+                      className="w-full h-full"
+                      resizeMode="cover"
+                    />
+                    {/* Status Badge (Top Right) */}
+                    <View className="absolute top-3 right-3">
+                       <View className={`px-2.5 py-1 rounded-md backdrop-blur-md ${c.isFree ? 'bg-emerald-500' : 'bg-slate-900'}`}>
+                          <Text className="text-[10px] font-bold text-white uppercase tracking-wide">
+                            {c.isFree ? "FREE" : "PAID"}
+                          </Text>
+                       </View>
+                    </View>
+                  </View>
+
+                  {/* Card Body */}
+                  <View className="p-5">
+                    <View className="flex-row justify-between items-start mb-2">
+                      <Text className="text-lg font-bold text-slate-800 leading-6 flex-1 mr-2" numberOfLines={1}>
+                        {c.title}
+                      </Text>
+                    </View>
+                    
+                    <Text className="text-xs text-slate-500 mb-4 leading-5 min-h-[40px]" numberOfLines={2}>
+                      {c.description || "No description provided."}
+                    </Text>
+
+                    {/* Stats Row */}
+                    <View className="flex-row items-center gap-4 mb-4 pb-4 border-b border-slate-50">
+                        <View className="flex-row items-center">
+                           <Ionicons name="book-outline" size={14} color="#94a3b8" />
+                           <Text className="text-xs text-slate-500 ml-1 font-medium">{c.lecturesCount || 0} Lessons</Text>
+                        </View>
+                        <View className="flex-row items-center">
+                           <Ionicons name="people-outline" size={14} color="#94a3b8" />
+                           <Text className="text-xs text-slate-500 ml-1 font-medium">{c.studentsCount || 0} Students</Text>
+                        </View>
+                    </View>
+
+                    {/* Action Buttons */}
+                    <View className="flex-row gap-2">
+                       {/* Upload Quiz Button */}
+                      <Pressable
+                        onPress={() => router.push({ pathname: '/(admin)/BulkQuizUpload', params: { courseId: c.courseId, courseName: c.title } })}
+                        className="flex-1 bg-indigo-50 py-2.5 rounded-lg flex-row items-center justify-center border border-indigo-100"
+                      >
+                        <Ionicons name="cloud-upload-outline" size={14} color="#4f46e5" />
+                        <Text className="text-indigo-700 font-bold text-xs ml-1.5">Upload Quiz</Text>
+                      </Pressable>
+                      
+                      {/* Delete Button */}
+                      <Pressable className="w-10 bg-rose-50 rounded-lg items-center justify-center border border-rose-100">
+                        <Ionicons name="trash-outline" size={16} color="#e11d48" />
+                      </Pressable>
+                    </View>
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          </ScrollView>
+        )}
       </View>
     </SafeAreaView>
   );
