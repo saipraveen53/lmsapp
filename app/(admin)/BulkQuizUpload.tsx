@@ -20,7 +20,7 @@ export default function BulkQuizUpload() {
   const [fileName, setFileName] = useState<string | null>(null);
   
   // Toggle: Grand Test vs Lecture Quiz
-  // CHANGED: Default is FALSE (Lecture Quiz) as per request
+  // Default is FALSE (Lecture Quiz) as per request
   const [isGrandTest, setIsGrandTest] = useState(false); 
 
   // Lecture Selection State
@@ -113,7 +113,7 @@ export default function BulkQuizUpload() {
     }
   };
 
-  // --- 3. UPLOAD LOGIC ---
+  // --- 3. SUBMIT / UPLOAD LOGIC ---
   const handleUpload = async () => {
     if (questions.length === 0) {
         Alert.alert("Error", "Please upload a CSV file with questions.");
@@ -139,6 +139,7 @@ export default function BulkQuizUpload() {
         
         console.log("Uploading Payload:", payload);
         
+        // This is your submit endpoint
         await api.post('/api/quiz/bulk-create', payload); 
         
         Alert.alert('Success', 'Quiz Uploaded Successfully!', [
@@ -159,6 +160,7 @@ export default function BulkQuizUpload() {
       {/* HEADER */}
       <LinearGradient colors={['#4338ca', '#e11d48']} start={{x:0, y:0}} end={{x:1, y:0}} className="pt-12 pb-4 px-4 shadow-sm">
         <View className="flex-row items-center">
+            {/* Navigates back to Courses page */}
             <TouchableOpacity onPress={() => router.push('/(admin)/Courses')} className="mr-3 bg-white/20 p-2 rounded-full">
                 <Ionicons name="arrow-back" size={20} color="white" />
             </TouchableOpacity>
@@ -172,7 +174,7 @@ export default function BulkQuizUpload() {
       {/* BODY */}
       <View className="flex-1 px-5 pt-6">
         
-        {/* Toggle Switch (UPDATED ORDER) */}
+        {/* Toggle Switch: Left = Lecture Quiz, Right = Grand Test */}
         <View className="flex-row bg-white p-1 rounded-xl border border-slate-200 mb-5">
           {/* LEFT: Lecture Quiz (Default) */}
           <TouchableOpacity 
@@ -235,7 +237,7 @@ export default function BulkQuizUpload() {
             </View>
         )}
 
-        {/* SUBMIT BUTTON (Only shows when questions are loaded) */}
+        {/* SUBMIT BUTTON (Shows after questions are loaded) */}
         {questions.length > 0 && (
             <TouchableOpacity onPress={handleUpload} disabled={isLoading} className="mb-6">
                 <LinearGradient colors={['#10b981', '#059669']} className="p-4 rounded-xl items-center shadow-md">
