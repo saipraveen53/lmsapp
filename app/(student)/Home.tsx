@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -18,7 +19,7 @@ import {
   View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CourseApi } from '../(utils)/axiosInstance';
+import { CourseApi } from '../(utils)/axiosInstance'; //
 
 const logoImg = require('../../assets/images/anasol-logo.png');
 
@@ -37,11 +38,16 @@ const Home = () => {
   // Selection & Enroll State
   const [selectedCourse, setSelectedCourse] = useState<any>(null);
   const [courseModalVisible, setCourseModalVisible] = useState(false);
-  const [enrolledCourseIds, setEnrolledCourseIds] = useState<string[]>([]); 
   
-  // --- NEW: Confirmation Modal State ---
+  // CHANGED: Store full enrollment objects instead of just IDs
+  const [enrollments, setEnrollments] = useState<any[]>([]); 
+  
+  // Confirmation Modal State
   const [confirmModalVisible, setConfirmModalVisible] = useState(false);
   const [isEnrolling, setIsEnrolling] = useState(false);
+
+  // --- LOGIC: Check if user has ANY enrollment ---
+  const hasAnyEnrollment = enrollments.length > 0;
 
   // --- WEB LAYOUT LOGIC ---
   const sideBarWidth = 400; 
@@ -62,12 +68,13 @@ const Home = () => {
     ? (availableGridWidth - (gap * (numColumns - 1))) / numColumns 
     : '100%';
 
-  // 1. Fetch User
+  // 1. Fetch User Name
   useEffect(() => {
     let fetchUsername = async () => {
       try {
-        const token = await AsyncStorage.getItem("accessToken");
+        let token = await AsyncStorage.getItem("accessToken");
         if (token) {
+          token = token.replace(/^"|"$/g, '');
           const decode: any = jwtDecode(token);
           setUserName(decode.sub || "Student");
         }
@@ -76,7 +83,7 @@ const Home = () => {
     fetchUsername();
   }, [])
 
-  // 2. Fetch Courses
+  // 2. Fetch All Courses
   useEffect(() => {
     const fetchCourses = async () => {
       try {
@@ -94,6 +101,34 @@ const Home = () => {
     fetchCourses();
   }, []);
 
+  // 3. Fetch Enrolled Courses (Stores full object with videoLibraryId)
+  const fetchEnrollments = async () => {
+    try {
+      let token = await AsyncStorage.getItem("accessToken");
+      if (!token) return;
+      token = token.replace(/^"|"$/g, '');
+
+      // Explicit Header for Android safety
+      const config = { headers: { 'Authorization': `Bearer ${token}` } };
+      
+      const response = await CourseApi.get(`/api/courses/my-enrollments`, config);
+      const data = response.data.data || response.data;
+      
+      console.log("Enrollments Data:", data); // Debug log
+
+      if (Array.isArray(data)) {
+          // Store the full enrollment object (contains courseId, videoLibraryId, etc.)
+          setEnrollments(data);
+      }
+    } catch (error: any) {
+      console.log("Enrollment fetch error", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchEnrollments();
+  }, []);
+
   // --- HANDLERS ---
   const handleCoursePress = (course: any) => {
       if (isWeb) {
@@ -108,26 +143,32 @@ const Home = () => {
       }
   };
 
-  // STEP 1: User Clicks Enroll -> Show Confirmation Modal
   const initiateEnroll = () => {
       if(!selectedCourse) return;
       setConfirmModalVisible(true);
   };
 
-  // STEP 2: User Confirms in Modal -> Call API
   const processEnrollment = async () => {
-    setConfirmModalVisible(false); // Close Modal
-    setIsEnrolling(true); // Start Loading
+    setConfirmModalVisible(false);
+    setIsEnrolling(true); 
     
     try {
-        const response = await CourseApi.post(`/api/courses/${selectedCourse.courseId}/enroll`);
+        let token = await AsyncStorage.getItem("accessToken");
+        let config = {};
+        if (token) {
+            token = token.replace(/^"|"$/g, '');
+            config = { headers: { 'Authorization': `Bearer ${token}` } };
+        }
+
+        const response = await CourseApi.post(`/api/courses/${selectedCourse.courseId}/enroll`, {}, config);
         
         if (response.status === 200 || response.data?.success) {
             Alert.alert("Success", "Enrollment Successful!", [
                 { 
                     text: "Start Learning", 
                     onPress: () => {
-                        setEnrolledCourseIds((prev) => [...prev, selectedCourse.courseId]);
+                        // Refresh enrollments to get the new videoLibraryId
+                        fetchEnrollments(); 
                     } 
                 }
             ]);
@@ -141,12 +182,21 @@ const Home = () => {
     }
   };
 
+  // --- UPDATED NAVIGATION LOGIC ---
   const handleContinueLearning = () => {
     if (!isWeb) setCourseModalVisible(false);
-    if (selectedCourse?.libraryId) {
-        router.push({ pathname: "/(videos)/[id]", params: { id: selectedCourse.libraryId } });
+    
+    // Find the enrollment record for the selected course
+    const enrollment = enrollments.find(e => e.courseId === selectedCourse?.courseId);
+    
+    // Extract videoLibraryId
+    const libId = enrollment?.videoLibraryId;
+
+    if (libId) {
+        // Pass the library ID to the dynamic route
+        router.push({ pathname: "/(videos)/[id]", params: { id: libId } });
     } else {
-        Alert.alert("Content Unavailable", "No video content linked.");
+        Alert.alert("Content Unavailable", "No video library linked to this enrollment.");
     }
   };
 
@@ -160,7 +210,12 @@ const Home = () => {
   // --- COURSE DETAILS COMPONENT ---
   const CourseDetailsContent = () => {
       if (!selectedCourse) return null;
-      const isEnrolled = enrolledCourseIds.includes(selectedCourse.courseId);
+      
+      // Check if enrolled using the new array structure
+      const isEnrolled = enrollments.some(e => e.courseId === selectedCourse.courseId);
+      
+      // Locked logic
+      const isLocked = !isEnrolled && hasAnyEnrollment;
 
       return (
         <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 50 }}>
@@ -170,6 +225,23 @@ const Home = () => {
                     className="w-full h-56 bg-gray-100 transition-transform duration-500 hover:scale-105"
                     resizeMode="cover"
                 />
+                
+                {isLocked && (
+                    <View 
+                        style={{
+                            position: 'absolute',
+                            top: 0, left: 0, right: 0, bottom: 0,
+                            backgroundColor: 'rgba(0,0,0,0.6)', 
+                            zIndex: 10,
+                            elevation: 10,
+                            justifyContent: 'center',
+                            alignItems: 'center'
+                        }}
+                    >
+                        <Ionicons name="lock-closed" size={40} color="rgba(255,255,255,0.9)" />
+                        <Text className="text-white font-bold mt-2">Locked</Text>
+                    </View>
+                )}
             </View>
             
             <View className="flex-row justify-between items-start mb-4">
@@ -200,6 +272,7 @@ const Home = () => {
                     ) : (<Text className="text-gray-500 italic">Details not available</Text>)}
             </View>
 
+            {/* ACTION BUTTON LOGIC */}
             {isEnrolled ? (
                 <TouchableOpacity 
                     activeOpacity={0.8} 
@@ -207,18 +280,31 @@ const Home = () => {
                     className="bg-indigo-600 py-4 rounded-xl shadow-lg shadow-indigo-200 mt-2 mb-8 flex-row justify-center items-center hover:bg-indigo-700 active:scale-95 transition-all duration-200"
                 >
                     <Text className="text-white text-center font-bold text-lg tracking-wide mr-2">Continue Learning</Text>
+                    <Ionicons name="play-circle" size={20} color="white" />
+                </TouchableOpacity>
+            ) : isLocked ? (
+                <TouchableOpacity 
+                    activeOpacity={1} 
+                    disabled={true}
+                    className="bg-gray-300 py-4 rounded-xl mt-2 mb-8 flex-row justify-center items-center border border-gray-300"
+                >
+                    <Ionicons name="lock-closed" size={20} color="#6b7280" />
+                    <Text className="text-gray-600 text-center font-bold text-lg tracking-wide ml-2">Locked</Text>
                 </TouchableOpacity>
             ) : (
                 <TouchableOpacity 
                     activeOpacity={0.8} 
-                    onPress={initiateEnroll} // Calls the Modal Opener
+                    onPress={initiateEnroll} 
                     disabled={isEnrolling} 
                     className="bg-green-600 py-4 rounded-xl shadow-lg shadow-green-200 mt-2 mb-8 hover:bg-green-700 active:scale-95 transition-all duration-200 flex-row justify-center items-center"
                 >
                     {isEnrolling ? (
                         <ActivityIndicator color="white" size="small" />
                     ) : (
-                        <Text className="text-white text-center font-bold text-lg tracking-wide">Enroll Now</Text>
+                        <>
+                            <Text className="text-white text-center font-bold text-lg tracking-wide mr-2">Enroll Now</Text>
+                            <Ionicons name="arrow-forward-circle-outline" size={20} color="white" />
+                        </>
                     )}
                 </TouchableOpacity>
             )}
@@ -244,7 +330,6 @@ const Home = () => {
         className={`shadow-md z-20 ${isWeb ? 'px-8 w-full' : 'rounded-b-3xl px-5'}`}
       >
         {isWeb ? (
-            // WEB HEADER
             <View className="flex-row items-center justify-between w-full">
                 <View className="flex-row items-center min-w-[200px]">
                     <Image source={logoImg} style={{ width: 40, height: 40 }} className="mr-3 bg-white rounded-full p-1 transition-transform hover:scale-110" resizeMode="contain" />
@@ -264,28 +349,14 @@ const Home = () => {
                 </TouchableOpacity>
             </View>
         ) : (
-            // MOBILE HEADER
             <View className="flex-row items-center justify-between w-full gap-3 mt-2">
-                <Image 
-                    source={logoImg} 
-                    style={{ width: 40, height: 40 }} 
-                    resizeMode="contain" 
-                />
-
+                <Image source={logoImg} style={{ width: 40, height: 40 }} resizeMode="contain" />
                 <View className="flex-1 flex-row items-center bg-white px-3 py-2 rounded-full shadow-sm">
                     <Text className="text-gray-400 mr-2 text-sm">🔍</Text>
-                    <TextInput 
-                        placeholder="Search..." 
-                        className="flex-1 text-gray-700 font-medium text-sm p-0" 
-                        placeholderTextColor="#9CA3AF" 
-                    />
+                    <TextInput placeholder="Search..." className="flex-1 text-gray-700 font-medium text-sm p-0" placeholderTextColor="#9CA3AF" />
                 </View>
-
                 <TouchableOpacity onPress={() => router.push('/(student)/MyProfile')}>
-                    <Image 
-                        source={{ uri: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png" }} 
-                        className="w-9 h-9 rounded-full border-2 border-white/30" 
-                    />
+                    <Image source={{ uri: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png" }} className="w-9 h-9 rounded-full border-2 border-white/30" />
                 </TouchableOpacity>
             </View>
         )}
@@ -294,7 +365,6 @@ const Home = () => {
       {/* --- CONTENT AREA --- */}
       <View className="flex-1 flex-row bg-gray-50 w-full overflow-hidden">
           
-          {/* SCROLLABLE GRID */}
           <ScrollView 
             className="flex-1" 
             showsVerticalScrollIndicator={false} 
@@ -302,7 +372,6 @@ const Home = () => {
           >
              <View className={`w-full ${isWeb ? 'px-6 pt-6' : 'px-5 pt-6'}`}>
                 
-                {/* Grid Title */}
                 <View className="flex-row justify-between items-center mb-4">
                     <Text className="text-xl font-bold text-gray-800">
                         {isSidebarOpen ? "Select a Course" : "All Available Courses"}
@@ -312,8 +381,10 @@ const Home = () => {
                 {isLoading ? <ActivityIndicator size="large" color="#4F46E5" className="mt-10" /> : (
                     <View style={isWeb ? { flexDirection: 'row', flexWrap: 'wrap', gap: gap } : {}}>
                         {courses.map((course: any) => {
-                            const isEnrolled = enrolledCourseIds.includes(course.courseId);
+                            // Check enrollment against the array of objects
+                            const isEnrolled = enrollments.some(e => e.courseId === course.courseId);
                             const isSelected = isWeb && selectedCourse?.courseId === course.courseId;
+                            const isLocked = !isEnrolled && hasAnyEnrollment;
                             
                             return (
                                 <TouchableOpacity
@@ -330,7 +401,8 @@ const Home = () => {
                                       }
                                     `}
                                 >
-                                    <View className="overflow-hidden">
+                                    {/* CARD IMAGE */}
+                                    <View className="overflow-hidden relative">
                                         <Image source={{ uri: course.thumbnailUrl || "https://img.freepik.com/free-vector/laptop-with-program-code-isometric-icon-software-development-programming-applications-dark-neon_39422-971.jpg" }} resizeMode="cover" 
                                             className={`${
                                                 isWeb 
@@ -338,6 +410,24 @@ const Home = () => {
                                                 : 'w-24 h-24 rounded-xl bg-gray-100'
                                             }`} 
                                         />
+                                        
+                                        {/* GRID CARD LOCK OVERLAY */}
+                                        {isLocked && (
+                                            <View 
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: 0, left: 0, right: 0, bottom: 0,
+                                                    backgroundColor: 'rgba(0,0,0,0.6)',
+                                                    zIndex: 10,
+                                                    elevation: 10,
+                                                    justifyContent: 'center',
+                                                    alignItems: 'center',
+                                                    borderRadius: isWeb ? 0 : 12 
+                                                }}
+                                            >
+                                                <Ionicons name="lock-closed" size={isWeb ? 32 : 24} color="rgba(255,255,255,0.9)" />
+                                            </View>
+                                        )}
                                     </View>
                                     
                                     <View className={`${isWeb ? 'px-4 pt-3 flex-1' : 'flex-1 ml-3 justify-center'}`}>
@@ -350,7 +440,17 @@ const Home = () => {
                                         </Text>
                                         <View className="flex-row items-center justify-between mt-2 pt-2 border-t border-gray-50">
                                             <Text className="text-indigo-600 font-bold text-sm">{course.isFree ? "Free" : `₹${course.price}`}</Text>
-                                            {isEnrolled && <Text className="text-green-600 text-[10px] font-bold">✓</Text>}
+                                            
+                                            {isEnrolled ? (
+                                                <View className="flex-row items-center bg-green-50 px-2 py-1 rounded-full">
+                                                    <Ionicons name="checkmark-circle" size={12} color="#16a34a" />
+                                                    <Text className="text-green-600 text-[10px] font-bold ml-1">Enrolled</Text>
+                                                </View>
+                                            ) : isLocked ? (
+                                                <View className="flex-row items-center bg-gray-100 px-2 py-1 rounded-full">
+                                                    <Ionicons name="lock-closed" size={12} color="#6b7280" />
+                                                </View>
+                                            ) : null}
                                         </View>
                                     </View>
                                 </TouchableOpacity>
