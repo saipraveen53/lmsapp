@@ -3,10 +3,20 @@ import axios from "axios";
 import { useRouter } from "expo-router";
 import { FieldArray, Formik } from "formik";
 import React from "react";
-import { Alert, Pressable, SafeAreaView, ScrollView, Text, TextInput, useWindowDimensions, View } from "react-native";
+import {
+    ActivityIndicator,
+    Alert,
+    Pressable,
+    SafeAreaView,
+    ScrollView,
+    Text,
+    TextInput,
+    View,
+    useWindowDimensions
+} from "react-native";
 import * as Yup from "yup";
 
-// --- Validation Schema ---
+// --- VALIDATION SCHEMA ---
 const CourseSchema = Yup.object().shape({
   title: Yup.string().required("Title is required"),
   subtitle: Yup.string().required("Subtitle is required"),
@@ -24,36 +34,37 @@ const CourseSchema = Yup.object().shape({
     Yup.object().shape({
       title: Yup.string().required("Section title required"),
       description: Yup.string().required("Section description required"),
-      orderIndex: Yup.number().min(1).required("Order required"),
+      orderIndex: Yup.number().required("Order required"),
       lectures: Yup.array().of(
         Yup.object().shape({
           title: Yup.string().required("Lecture title required"),
           description: Yup.string().required("Lecture description required"),
-          durationSeconds: Yup.number().min(1).required("Duration required"),
-          isPreview: Yup.boolean(),
-          orderIndex: Yup.number().min(1).required("Order required"),
-          videoLibraryId: Yup.number().required("Video Library ID required"),
-          videoGuid: Yup.string().required("Video GUID required"),
+          durationSeconds: Yup.number().min(1, "Duration must be > 0").required("Duration required"),
+          orderIndex: Yup.number().required("Order required"),
+          // videoLibraryId & videoGuid are populated via API, but we validate them to ensure video is linked
+          videoLibraryId: Yup.number().required("Video not linked"),
+          videoGuid: Yup.string().required("Video not linked"),
         })
       )
     })
   )
 });
 
+// --- INITIAL VALUES ---
 const initialValues = {
   title: "",
   subtitle: "",
   description: "",
   price: 0,
-  language: "",
-  level: "",
-  libraryId: "",
+  language: "English",
+  level: "Beginner",
+  libraryId: "lib_default", // Default or generated
   thumbnailUrl: "",
   previewVideoUrl: "",
   whatYouWillLearn: "",
   requirements: "",
   targetAudience: "",
-  categoryId: 0,
+  categoryId: 1,
   isFree: false,
   isPublished: false,
   sections: [
@@ -66,330 +77,257 @@ const initialValues = {
   ]
 };
 
+// --- API CONFIG ---
+// Note: Using the IP provided in the files. 
+// If you meant 196.168... please update, but 192.168... is standard for local networks.
+const API_BASE_URL = "http://192.168.0.249:8088/api"; 
+
 export default function CourseForm() {
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const isDesktop = width >= 900;
+  const isDesktop = width >= 1024;
 
-  // --- Add Video Helper ---
-  const addVideo = async (lecture, setFieldValue, sectionIdx, lectureIdx) => {
+  // --- VIDEO LINKING HANDLER ---
+  const handleLinkVideo = async (lecture: any, setFieldValue: any, sectionIdx: number, lectureIdx: number) => {
+    if (!lecture.title || !lecture.durationSeconds) {
+      Alert.alert("Validation", "Please enter Lecture Title and Duration before linking.");
+      return;
+    }
+
     try {
-      const res = await axios.post("http://192.168.0.249:8088/api/videos/link", lecture);
-      setFieldValue(`sections[${sectionIdx}].lectures[${lectureIdx}].videoLibraryId`, res.data.videoLibraryId);
-      setFieldValue(`sections[${sectionIdx}].lectures[${lectureIdx}].videoGuid`, res.data.videoGuid);
-      Alert.alert("Success", "Video linked successfully!");
+      // Sending payload as requested
+      const payload = {
+        ...lecture,
+        // If courseId is needed by the backend for linking but the course isn't created yet,
+        // you might need to send 0 or a temp ID. 
+        courseId: 0, 
+      };
+
+      const res = await axios.post(`${API_BASE_URL}/videos/link`, payload);
+      
+      if (res.data) {
+        setFieldValue(`sections[${sectionIdx}].lectures[${lectureIdx}].videoLibraryId`, res.data.videoLibraryId);
+        setFieldValue(`sections[${sectionIdx}].lectures[${lectureIdx}].videoGuid`, res.data.videoGuid);
+        Alert.alert("Success", "Video Linked Successfully!");
+      }
     } catch (err) {
-      Alert.alert("Error", "Failed to link video.");
+      console.error(err);
+      Alert.alert("Error", "Failed to link video. Check server connection.");
     }
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#f8fafc" }}>
-      <ScrollView contentContainerStyle={{ padding: isDesktop ? 40 : 16, maxWidth: 900, alignSelf: "center" }}>
-        {/* Back Button */}
-        <Pressable
-          onPress={() => router.back()}
-          style={{ flexDirection: "row", alignItems: "center", marginBottom: 24, alignSelf: "flex-start" }}
+    <SafeAreaView className="flex-1 bg-slate-50">
+      {/* HEADER */}
+      <View className="bg-white px-6 py-4 border-b border-slate-200 flex-row items-center justify-between shadow-sm z-10">
+        <Pressable 
+            onPress={() => router.push("/(admin)/Courses")}
+            className="flex-row items-center bg-slate-100 px-3 py-2 rounded-lg active:bg-slate-200"
         >
-          <Ionicons name="arrow-back" size={22} color="#4338ca" />
-          <Text style={{ marginLeft: 8, color: "#4338ca", fontWeight: "bold", fontSize: 16 }}>Back to Courses</Text>
+          <Ionicons name="arrow-back" size={20} color="#475569" />
+          <Text className="ml-2 font-bold text-slate-700">Back to Courses</Text>
         </Pressable>
+        <Text className="text-xl font-extrabold text-slate-800">Create New Course</Text>
+        <View style={{ width: 100 }} /> 
+      </View>
 
-        <Text style={{ fontSize: 24, fontWeight: "bold", color: "#0f172a", marginBottom: 24 }}>Create New Course</Text>
-
+      <ScrollView contentContainerStyle={{ padding: isDesktop ? 40 : 20, paddingBottom: 100 }}>
         <Formik
           initialValues={initialValues}
           validationSchema={CourseSchema}
           onSubmit={async (values, { setSubmitting, resetForm }) => {
             try {
-              await axios.post("http://192.168.0.249:8088/api/courses", values);
-              Alert.alert("Success", "Course created successfully!");
+              console.log("Submitting Course:", values);
+              await axios.post(`${API_BASE_URL}/courses`, values);
+              Alert.alert("Success", "Course created successfully!", [
+                { text: "OK", onPress: () => router.push("/(admin)/Courses") }
+              ]);
               resetForm();
-              router.back();
             } catch (err) {
-              Alert.alert("Error", "Failed to create course.");
+              console.error(err);
+              Alert.alert("Error", "Failed to create course. Please try again.");
             } finally {
               setSubmitting(false);
             }
           }}
         >
           {({ values, errors, touched, handleChange, handleBlur, handleSubmit, setFieldValue, isSubmitting }) => (
-            <View>
-              {/* --- Main Fields --- */}
-              <View style={isDesktop ? { flexDirection: "row", gap: 32 } : {}}>
-                <View style={{ flex: 1 }}>
-                  <TextInput
-                    placeholder="Title *"
-                    style={{ backgroundColor: "#fff", borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: "#e2e8f0" }}
-                    value={values.title}
-                    onChangeText={handleChange("title")}
-                    onBlur={handleBlur("title")}
-                  />
-                  {touched.title && errors.title && <Text style={{ color: "#e11d48", fontSize: 12, marginBottom: 8 }}>{errors.title}</Text>}
+            <View className={`mx-auto ${isDesktop ? 'max-w-5xl w-full' : 'w-full'}`}>
+              
+              {/* --- 1. BASIC INFORMATION --- */}
+              <View className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm mb-6">
+                <Text className="text-lg font-bold text-slate-800 mb-4 flex-row items-center">
+                    <Ionicons name="information-circle" size={20} color="#4f46e5" /> Basic Information
+                </Text>
 
-                  <TextInput
-                    placeholder="Subtitle *"
-                    style={{ backgroundColor: "#fff", borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: "#e2e8f0" }}
-                    value={values.subtitle}
-                    onChangeText={handleChange("subtitle")}
-                    onBlur={handleBlur("subtitle")}
-                  />
-                  {touched.subtitle && errors.subtitle && <Text style={{ color: "#e11d48", fontSize: 12, marginBottom: 8 }}>{errors.subtitle}</Text>}
+                <View className="flex-row flex-wrap gap-4">
+                  <FormField label="Course Title *" placeholder="e.g. Spring Boot Masterclass" value={values.title} onChangeText={handleChange("title")} onBlur={handleBlur("title")} error={touched.title && errors.title} width={isDesktop ? "48%" : "100%"} />
+                  <FormField label="Subtitle *" placeholder="e.g. Build Enterprise Applications" value={values.subtitle} onChangeText={handleChange("subtitle")} onBlur={handleBlur("subtitle")} error={touched.subtitle && errors.subtitle} width={isDesktop ? "48%" : "100%"} />
+                  
+                  <FormField label="Description *" placeholder="Detailed course description..." value={values.description} onChangeText={handleChange("description")} onBlur={handleBlur("description")} error={touched.description && errors.description} multiline width="100%" height={100} />
+                  
+                  <FormField label="Price ($) *" placeholder="99.99" value={values.price?.toString()} onChangeText={(t) => setFieldValue("price", t === "" ? "" : Number(t))} onBlur={handleBlur("price")} error={touched.price && errors.price} keyboardType="numeric" width={isDesktop ? "23%" : "48%"} />
+                  <FormField label="Category ID *" placeholder="1" value={values.categoryId?.toString()} onChangeText={(t) => setFieldValue("categoryId", t === "" ? "" : Number(t))} onBlur={handleBlur("categoryId")} error={touched.categoryId && errors.categoryId} keyboardType="numeric" width={isDesktop ? "23%" : "48%"} />
+                  <FormField label="Language *" placeholder="English" value={values.language} onChangeText={handleChange("language")} onBlur={handleBlur("language")} error={touched.language && errors.language} width={isDesktop ? "23%" : "48%"} />
+                  <FormField label="Level *" placeholder="Beginner/Intermediate" value={values.level} onChangeText={handleChange("level")} onBlur={handleBlur("level")} error={touched.level && errors.level} width={isDesktop ? "23%" : "48%"} />
+                </View>
 
-                  <TextInput
-                    placeholder="Description *"
-                    style={{ backgroundColor: "#fff", borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: "#e2e8f0" }}
-                    value={values.description}
-                    onChangeText={handleChange("description")}
-                    onBlur={handleBlur("description")}
-                    multiline
-                  />
-                  {touched.description && errors.description && <Text style={{ color: "#e11d48", fontSize: 12, marginBottom: 8 }}>{errors.description}</Text>}
-
-                  <TextInput
-                    placeholder="Price *"
-                    style={{ backgroundColor: "#fff", borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: "#e2e8f0" }}
-                    value={values.price?.toString()}
-                    onChangeText={text => setFieldValue("price", text === "" ? 0 : Number(text))}
-                    onBlur={handleBlur("price")}
-                    keyboardType="numeric"
-                  />
-                  {touched.price && errors.price && <Text style={{ color: "#e11d48", fontSize: 12, marginBottom: 8 }}>{errors.price}</Text>}
-
-                  <TextInput
-                    placeholder="Language *"
-                    style={{ backgroundColor: "#fff", borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: "#e2e8f0" }}
-                    value={values.language}
-                    onChangeText={handleChange("language")}
-                    onBlur={handleBlur("language")}
-                  />
-                  {touched.language && errors.language && <Text style={{ color: "#e11d48", fontSize: 12, marginBottom: 8 }}>{errors.language}</Text>}
-
-                  <TextInput
-                    placeholder="Level *"
-                    style={{ backgroundColor: "#fff", borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: "#e2e8f0" }}
-                    value={values.level}
-                    onChangeText={handleChange("level")}
-                    onBlur={handleBlur("level")}
-                  />
-                  {touched.level && errors.level && <Text style={{ color: "#e11d48", fontSize: 12, marginBottom: 8 }}>{errors.level}</Text>}
-
-                  <TextInput
-                    placeholder="Thumbnail URL *"
-                    style={{ backgroundColor: "#fff", borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: "#e2e8f0" }}
-                    value={values.thumbnailUrl}
-                    onChangeText={handleChange("thumbnailUrl")}
-                    onBlur={handleBlur("thumbnailUrl")}
-                  />
-                  {touched.thumbnailUrl && errors.thumbnailUrl && <Text style={{ color: "#e11d48", fontSize: 12, marginBottom: 8 }}>{errors.thumbnailUrl}</Text>}
-
-                  <TextInput
-                    placeholder="Preview Video URL"
-                    style={{ backgroundColor: "#fff", borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: "#e2e8f0" }}
-                    value={values.previewVideoUrl}
-                    onChangeText={handleChange("previewVideoUrl")}
-                    onBlur={handleBlur("previewVideoUrl")}
-                  />
-                  {touched.previewVideoUrl && errors.previewVideoUrl && <Text style={{ color: "#e11d48", fontSize: 12, marginBottom: 8 }}>{errors.previewVideoUrl}</Text>}
-
-                  <TextInput
-                    placeholder="What You Will Learn *"
-                    style={{ backgroundColor: "#fff", borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: "#e2e8f0" }}
-                    value={values.whatYouWillLearn}
-                    onChangeText={handleChange("whatYouWillLearn")}
-                    onBlur={handleBlur("whatYouWillLearn")}
-                  />
-                  {touched.whatYouWillLearn && errors.whatYouWillLearn && <Text style={{ color: "#e11d48", fontSize: 12, marginBottom: 8 }}>{errors.whatYouWillLearn}</Text>}
-
-                  <TextInput
-                    placeholder="Requirements *"
-                    style={{ backgroundColor: "#fff", borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: "#e2e8f0" }}
-                    value={values.requirements}
-                    onChangeText={handleChange("requirements")}
-                    onBlur={handleBlur("requirements")}
-                  />
-                  {touched.requirements && errors.requirements && <Text style={{ color: "#e11d48", fontSize: 12, marginBottom: 8 }}>{errors.requirements}</Text>}
-
-                  <TextInput
-                    placeholder="Target Audience *"
-                    style={{ backgroundColor: "#fff", borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: "#e2e8f0" }}
-                    value={values.targetAudience}
-                    onChangeText={handleChange("targetAudience")}
-                    onBlur={handleBlur("targetAudience")}
-                  />
-                  {touched.targetAudience && errors.targetAudience && <Text style={{ color: "#e11d48", fontSize: 12, marginBottom: 8 }}>{errors.targetAudience}</Text>}
-
-                  <TextInput
-                    placeholder="Category ID *"
-                    style={{ backgroundColor: "#fff", borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: "#e2e8f0" }}
-                    value={values.categoryId?.toString()}
-                    onChangeText={text => setFieldValue("categoryId", text === "" ? 0 : Number(text))}
-                    onBlur={handleBlur("categoryId")}
-                    keyboardType="numeric"
-                  />
-                  {touched.categoryId && errors.categoryId && <Text style={{ color: "#e11d48", fontSize: 12, marginBottom: 8 }}>{errors.categoryId}</Text>}
-
-                  {/* Switches for isFree and isPublished */}
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 16, marginVertical: 8 }}>
-                    <Pressable onPress={() => setFieldValue("isFree", !values.isFree)} style={{ flexDirection: "row", alignItems: "center" }}>
-                      <Ionicons name={values.isFree ? "checkbox" : "square-outline"} size={20} color="#4f46e5" />
-                      <Text style={{ marginLeft: 8, color: "#334155" }}>Free</Text>
-                    </Pressable>
-                    <Pressable onPress={() => setFieldValue("isPublished", !values.isPublished)} style={{ flexDirection: "row", alignItems: "center" }}>
-                      <Ionicons name={values.isPublished ? "checkbox" : "square-outline"} size={20} color="#4f46e5" />
-                      <Text style={{ marginLeft: 8, color: "#334155" }}>Published</Text>
-                    </Pressable>
-                  </View>
+                {/* Toggles */}
+                <View className="flex-row mt-4 gap-6">
+                  <Toggle label="Is Free?" value={values.isFree} onChange={() => setFieldValue("isFree", !values.isFree)} />
+                  <Toggle label="Published?" value={values.isPublished} onChange={() => setFieldValue("isPublished", !values.isPublished)} />
                 </View>
               </View>
 
-              {/* --- Sections & Lectures --- */}
-              <FieldArray name="sections">
-                {({ push, remove }) => (
-                  <View style={{ marginTop: 32 }}>
-                    <Text style={{ fontSize: 18, fontWeight: "bold", color: "#1e293b", marginBottom: 16 }}>Sections</Text>
-                    {values.sections.map((section, sectionIdx) => (
-                      <View key={sectionIdx} style={{ backgroundColor: "#fff", borderRadius: 16, padding: 16, marginBottom: 24, borderWidth: 1, borderColor: "#e2e8f0", shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 2 }}>
-                        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                          <Text style={{ fontWeight: "bold", color: "#4338ca" }}>Section {sectionIdx + 1}</Text>
-                          {values.sections.length > 1 && (
-                            <Pressable onPress={() => remove(sectionIdx)}>
-                              <Ionicons name="trash-outline" size={18} color="#e11d48" />
-                            </Pressable>
-                          )}
-                        </View>
-                        <TextInput
-                          placeholder="Section Title *"
-                          style={{ backgroundColor: "#f1f5f9", borderRadius: 8, padding: 8, marginBottom: 8, borderWidth: 1, borderColor: "#e2e8f0" }}
-                          value={section.title}
-                          onChangeText={text => setFieldValue(`sections[${sectionIdx}].title`, text)}
-                        />
-                        <TextInput
-                          placeholder="Section Description *"
-                          style={{ backgroundColor: "#f1f5f9", borderRadius: 8, padding: 8, marginBottom: 8, borderWidth: 1, borderColor: "#e2e8f0" }}
-                          value={section.description}
-                          onChangeText={text => setFieldValue(`sections[${sectionIdx}].description`, text)}
-                        />
-                        <TextInput
-                          placeholder="Order Index *"
-                          style={{ backgroundColor: "#f1f5f9", borderRadius: 8, padding: 8, marginBottom: 8, borderWidth: 1, borderColor: "#e2e8f0" }}
-                          value={section.orderIndex?.toString()}
-                          onChangeText={text => setFieldValue(`sections[${sectionIdx}].orderIndex`, text === "" ? 1 : Number(text))}
-                          keyboardType="numeric"
-                        />
+              {/* --- 2. MEDIA & DETAILS --- */}
+              <View className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm mb-6">
+                <Text className="text-lg font-bold text-slate-800 mb-4 flex-row items-center">
+                    <Ionicons name="image" size={20} color="#ec4899" /> Media & Content
+                </Text>
+                <View className="flex-row flex-wrap gap-4">
+                  <FormField label="Thumbnail URL *" placeholder="https://..." value={values.thumbnailUrl} onChangeText={handleChange("thumbnailUrl")} onBlur={handleBlur("thumbnailUrl")} error={touched.thumbnailUrl && errors.thumbnailUrl} width={isDesktop ? "48%" : "100%"} />
+                  <FormField label="Preview Video URL" placeholder="https://..." value={values.previewVideoUrl} onChangeText={handleChange("previewVideoUrl")} onBlur={handleBlur("previewVideoUrl")} error={touched.previewVideoUrl && errors.previewVideoUrl} width={isDesktop ? "48%" : "100%"} />
+                  
+                  <FormField label="What You Will Learn *" placeholder="Bullet points..." value={values.whatYouWillLearn} onChangeText={handleChange("whatYouWillLearn")} onBlur={handleBlur("whatYouWillLearn")} error={touched.whatYouWillLearn && errors.whatYouWillLearn} multiline width="100%" />
+                  <FormField label="Requirements *" placeholder="Prerequisites..." value={values.requirements} onChangeText={handleChange("requirements")} onBlur={handleBlur("requirements")} error={touched.requirements && errors.requirements} width={isDesktop ? "48%" : "100%"} />
+                  <FormField label="Target Audience *" placeholder="Who is this for?" value={values.targetAudience} onChangeText={handleChange("targetAudience")} onBlur={handleBlur("targetAudience")} error={touched.targetAudience && errors.targetAudience} width={isDesktop ? "48%" : "100%"} />
+                </View>
+              </View>
 
-                        {/* Lectures */}
-                        <FieldArray name={`sections[${sectionIdx}].lectures`}>
-                          {({ push: pushLecture, remove: removeLecture }) => (
-                            <View>
-                              <Text style={{ fontWeight: "bold", color: "#334155", marginTop: 8, marginBottom: 8 }}>Lectures</Text>
-                              {section.lectures.map((lecture, lectureIdx) => (
-                                <View key={lectureIdx} style={{ backgroundColor: "#eef2ff", borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: "#c7d2fe" }}>
-                                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                                    <Text style={{ fontWeight: "bold", fontSize: 12, color: "#3730a3" }}>Lecture {lectureIdx + 1}</Text>
-                                    <Pressable onPress={() => removeLecture(lectureIdx)}>
-                                      <Ionicons name="trash-outline" size={16} color="#e11d48" />
-                                    </Pressable>
-                                  </View>
-                                  <TextInput
-                                    placeholder="Lecture Title *"
-                                    style={{ backgroundColor: "#fff", borderRadius: 8, padding: 8, marginBottom: 4, borderWidth: 1, borderColor: "#e2e8f0" }}
-                                    value={lecture.title}
-                                    onChangeText={text => setFieldValue(`sections[${sectionIdx}].lectures[${lectureIdx}].title`, text)}
-                                  />
-                                  <TextInput
-                                    placeholder="Lecture Description *"
-                                    style={{ backgroundColor: "#fff", borderRadius: 8, padding: 8, marginBottom: 4, borderWidth: 1, borderColor: "#e2e8f0" }}
-                                    value={lecture.description}
-                                    onChangeText={text => setFieldValue(`sections[${sectionIdx}].lectures[${lectureIdx}].description`, text)}
-                                  />
-                                  <TextInput
-                                    placeholder="Duration (seconds) *"
-                                    style={{ backgroundColor: "#fff", borderRadius: 8, padding: 8, marginBottom: 4, borderWidth: 1, borderColor: "#e2e8f0" }}
-                                    value={lecture.durationSeconds?.toString() || ""}
-                                    onChangeText={text => setFieldValue(`sections[${sectionIdx}].lectures[${lectureIdx}].durationSeconds`, text === "" ? 0 : Number(text))}
-                                    keyboardType="numeric"
-                                  />
-                                  <TextInput
-                                    placeholder="Order Index *"
-                                    style={{ backgroundColor: "#fff", borderRadius: 8, padding: 8, marginBottom: 4, borderWidth: 1, borderColor: "#e2e8f0" }}
-                                    value={lecture.orderIndex?.toString() || ""}
-                                    onChangeText={text => setFieldValue(`sections[${sectionIdx}].lectures[${lectureIdx}].orderIndex`, text === "" ? 1 : Number(text))}
-                                    keyboardType="numeric"
-                                  />
+              {/* --- 3. CURRICULUM (SECTIONS & LECTURES) --- */}
+              <View className="mb-6">
+                <Text className="text-2xl font-bold text-slate-800 mb-4">Curriculum</Text>
+                
+                <FieldArray name="sections">
+                  {({ push, remove }) => (
+                    <View>
+                      {values.sections.map((section, sectionIdx) => (
+                        <View key={sectionIdx} className="bg-white rounded-2xl border border-slate-300 shadow-sm mb-6 overflow-hidden">
+                          {/* Section Header */}
+                          <View className="bg-slate-50 p-4 border-b border-slate-200 flex-row justify-between items-center">
+                            <Text className="font-bold text-indigo-700 text-lg">Section {sectionIdx + 1}</Text>
+                            <Pressable onPress={() => remove(sectionIdx)} className="bg-rose-100 p-2 rounded-full">
+                                <Ionicons name="trash-outline" size={18} color="#e11d48" />
+                            </Pressable>
+                          </View>
+
+                          <View className="p-4">
+                            <View className="flex-row flex-wrap gap-4 mb-4">
+                                <FormField label="Section Title" value={section.title} onChangeText={(t) => setFieldValue(`sections[${sectionIdx}].title`, t)} placeholder="Intro to Spring" width={isDesktop ? "60%" : "100%"} />
+                                <FormField label="Order" value={section.orderIndex.toString()} onChangeText={(t) => setFieldValue(`sections[${sectionIdx}].orderIndex`, Number(t))} keyboardType="numeric" width={isDesktop ? "15%" : "48%"} />
+                            </View>
+                            <FormField label="Description" value={section.description} onChangeText={(t) => setFieldValue(`sections[${sectionIdx}].description`, t)} placeholder="Section summary..." width="100%" />
+
+                            {/* Lectures List */}
+                            <Text className="font-bold text-slate-700 mt-6 mb-3">Lectures</Text>
+                            <FieldArray name={`sections[${sectionIdx}].lectures`}>
+                              {({ push: pushLecture, remove: removeLecture }) => (
+                                <View>
+                                  {section.lectures.map((lecture, lectureIdx) => (
+                                    <View key={lectureIdx} className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-4 mb-3">
+                                        <View className="flex-row justify-between mb-3">
+                                            <Text className="font-bold text-indigo-900 text-xs uppercase tracking-wide">Lecture {lectureIdx + 1}</Text>
+                                            <Pressable onPress={() => removeLecture(lectureIdx)}>
+                                                <Ionicons name="close-circle" size={20} color="#94a3b8" />
+                                            </Pressable>
+                                        </View>
+                                        
+                                        <View className="flex-row flex-wrap gap-3">
+                                            <FormField label="Title" value={lecture.title} onChangeText={(t) => setFieldValue(`sections[${sectionIdx}].lectures[${lectureIdx}].title`, t)} width={isDesktop ? "40%" : "100%"} bg="bg-white" />
+                                            <FormField label="Duration (Sec)" value={lecture.durationSeconds.toString()} onChangeText={(t) => setFieldValue(`sections[${sectionIdx}].lectures[${lectureIdx}].durationSeconds`, Number(t))} keyboardType="numeric" width={isDesktop ? "15%" : "48%"} bg="bg-white" />
+                                            <FormField label="Order" value={lecture.orderIndex.toString()} onChangeText={(t) => setFieldValue(`sections[${sectionIdx}].lectures[${lectureIdx}].orderIndex`, Number(t))} keyboardType="numeric" width={isDesktop ? "15%" : "48%"} bg="bg-white" />
+                                            
+                                            {/* Preview Toggle */}
+                                            <Pressable 
+                                                onPress={() => setFieldValue(`sections[${sectionIdx}].lectures[${lectureIdx}].isPreview`, !lecture.isPreview)}
+                                                className={`h-12 flex-row items-center px-3 rounded-lg border mt-6 ${lecture.isPreview ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200'}`}
+                                            >
+                                                <Ionicons name={lecture.isPreview ? "checkbox" : "square-outline"} size={20} color={lecture.isPreview ? "#10b981" : "#cbd5e1"} />
+                                                <Text className="ml-2 text-xs font-bold text-slate-600">Preview?</Text>
+                                            </Pressable>
+                                        </View>
+
+                                        <FormField label="Description" value={lecture.description} onChangeText={(t) => setFieldValue(`sections[${sectionIdx}].lectures[${lectureIdx}].description`, t)} width="100%" bg="bg-white" />
+
+                                        {/* Video Link Status & Button */}
+                                        <View className="flex-row items-center justify-between mt-4 bg-white p-3 rounded-lg border border-slate-200">
+                                            <View>
+                                                <Text className="text-[10px] font-bold text-slate-400 uppercase">Video Connection</Text>
+                                                {lecture.videoGuid ? (
+                                                    <View className="flex-row items-center mt-1">
+                                                        <Ionicons name="checkmark-circle" size={16} color="#10b981" />
+                                                        <Text className="text-xs text-emerald-600 font-bold ml-1">Linked (ID: {lecture.videoLibraryId})</Text>
+                                                    </View>
+                                                ) : (
+                                                    <View className="flex-row items-center mt-1">
+                                                        <Ionicons name="alert-circle" size={16} color="#f59e0b" />
+                                                        <Text className="text-xs text-amber-600 font-bold ml-1">Not Linked</Text>
+                                                    </View>
+                                                )}
+                                            </View>
+                                            <Pressable 
+                                                onPress={() => handleLinkVideo(lecture, setFieldValue, sectionIdx, lectureIdx)}
+                                                className="bg-indigo-600 px-4 py-2 rounded-lg shadow-sm active:opacity-90"
+                                            >
+                                                <Text className="text-white text-xs font-bold">
+                                                    {lecture.videoGuid ? "Re-Link Video" : "Link Video"}
+                                                </Text>
+                                            </Pressable>
+                                        </View>
+                                        {/* Validation Error for Video */}
+                                        {/* You can access nested errors here if needed */}
+                                    </View>
+                                  ))}
+                                  
+                                  {/* Add Lecture Button */}
                                   <Pressable
-                                    onPress={() => setFieldValue(`sections[${sectionIdx}].lectures[${lectureIdx}].isPreview`, !lecture.isPreview)}
-                                    style={{ flexDirection: "row", alignItems: "center", marginTop: 4 }}
+                                    onPress={() => pushLecture({
+                                      title: "", description: "", durationSeconds: 0, isPreview: false,
+                                      orderIndex: section.lectures.length + 1, videoLibraryId: 0, videoGuid: ""
+                                    })}
+                                    className="flex-row items-center justify-center p-3 border border-dashed border-indigo-300 rounded-xl bg-indigo-50 active:bg-indigo-100"
                                   >
-                                    <Ionicons name={lecture.isPreview ? "checkbox" : "square-outline"} size={18} color="#4f46e5" />
-                                    <Text style={{ marginLeft: 8, color: "#334155" }}>Preview</Text>
-                                  </Pressable>
-                                  {/* Video Library ID and GUID (auto-filled after video link) */}
-                                  <TextInput
-                                    placeholder="Video Library ID (auto)"
-                                    style={{ backgroundColor: "#fff", borderRadius: 8, padding: 8, marginBottom: 4, borderWidth: 1, borderColor: "#e2e8f0" }}
-                                    value={lecture.videoLibraryId?.toString() || ""}
-                                    editable={false}
-                                  />
-                                  <TextInput
-                                    placeholder="Video GUID (auto)"
-                                    style={{ backgroundColor: "#fff", borderRadius: 8, padding: 8, marginBottom: 4, borderWidth: 1, borderColor: "#e2e8f0" }}
-                                    value={lecture.videoGuid || ""}
-                                    editable={false}
-                                  />
-                                  {/* Add Video Button */}
-                                  <Pressable
-                                    onPress={() => addVideo(lecture, setFieldValue, sectionIdx, lectureIdx)}
-                                    style={{ marginTop: 8, backgroundColor: "#4f46e5", borderRadius: 8, paddingVertical: 8, alignItems: "center" }}
-                                  >
-                                    <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 12 }}>Link Video</Text>
+                                    <Ionicons name="add" size={18} color="#4338ca" />
+                                    <Text className="text-indigo-700 font-bold ml-2 text-sm">Add Lecture</Text>
                                   </Pressable>
                                 </View>
-                              ))}
-                              <Pressable
-                                onPress={() => pushLecture({
-                                  title: "",
-                                  description: "",
-                                  durationSeconds: 0,
-                                  isPreview: false,
-                                  orderIndex: section.lectures.length + 1,
-                                  videoLibraryId: 0,
-                                  videoGuid: ""
-                                })}
-                                style={{ flexDirection: "row", alignItems: "center", marginTop: 8 }}
-                              >
-                                <Ionicons name="add-circle-outline" size={18} color="#4f46e5" />
-                                <Text style={{ marginLeft: 8, color: "#4338ca", fontWeight: "bold", fontSize: 12 }}>Add Lecture</Text>
-                              </Pressable>
-                            </View>
-                          )}
-                        </FieldArray>
-                      </View>
-                    ))}
-                    <Pressable
-                      onPress={() => push({
-                        title: "",
-                        description: "",
-                        orderIndex: values.sections.length + 1,
-                        lectures: []
-                      })}
-                      style={{ flexDirection: "row", alignItems: "center" }}
-                    >
-                      <Ionicons name="add-circle-outline" size={20} color="#4f46e5" />
-                      <Text style={{ marginLeft: 8, color: "#4338ca", fontWeight: "bold", fontSize: 16 }}>Add Section</Text>
-                    </Pressable>
-                  </View>
-                )}
-              </FieldArray>
+                              )}
+                            </FieldArray>
+                          </View>
+                        </View>
+                      ))}
 
-              {/* --- Submit Button --- */}
-              <Pressable
-                onPress={() => handleSubmit()}
-                disabled={isSubmitting}
-                style={{ marginTop: 32, backgroundColor: "#4f46e5", borderRadius: 16, paddingVertical: 16, alignItems: "center", opacity: isSubmitting ? 0.7 : 1 }}
-              >
-                <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 18 }}>Create Course</Text>
-              </Pressable>
+                      {/* Add Section Button */}
+                      <Pressable
+                        onPress={() => push({ title: "", description: "", orderIndex: values.sections.length + 1, lectures: [] })}
+                        className="flex-row items-center justify-center p-4 bg-slate-800 rounded-xl shadow-lg active:bg-slate-900"
+                      >
+                        <Ionicons name="add-circle" size={24} color="white" />
+                        <Text className="text-white font-bold ml-2 text-base">Add New Section</Text>
+                      </Pressable>
+                    </View>
+                  )}
+                </FieldArray>
+              </View>
+
+              {/* --- SUBMIT BUTTON --- */}
+              <View className="mb-20">
+                  <Pressable
+                    onPress={() => handleSubmit()}
+                    disabled={isSubmitting}
+                    className={`w-full py-4 rounded-xl items-center shadow-md flex-row justify-center ${isSubmitting ? 'bg-indigo-400' : 'bg-indigo-600'}`}
+                  >
+                    {isSubmitting ? (
+                        <ActivityIndicator color="white" />
+                    ) : (
+                        <>
+                            <Ionicons name="checkmark-done" size={24} color="white" />
+                            <Text className="text-white font-bold text-lg ml-2">Create Course</Text>
+                        </>
+                    )}
+                  </Pressable>
+              </View>
+
             </View>
           )}
         </Formik>
@@ -397,3 +335,30 @@ export default function CourseForm() {
     </SafeAreaView>
   );
 }
+
+// --- REUSABLE COMPONENTS ---
+
+const FormField = ({ label, value, onChangeText, onBlur, placeholder, error, multiline, keyboardType, width = "100%", height, bg = "bg-slate-50" }: any) => (
+  <View style={{ width: width, marginBottom: 12 }}>
+    <Text className="text-xs font-bold text-slate-500 mb-1.5 ml-1 uppercase">{label}</Text>
+    <TextInput
+      value={value}
+      onChangeText={onChangeText}
+      onBlur={onBlur}
+      placeholder={placeholder}
+      multiline={multiline}
+      keyboardType={keyboardType}
+      placeholderTextColor="#94a3b8"
+      className={`${bg} border ${error ? 'border-rose-300' : 'border-slate-200'} text-slate-800 text-sm rounded-xl px-3 py-3 ${multiline ? 'text-top' : ''}`}
+      style={height ? { height } : {}}
+    />
+    {error && <Text className="text-rose-500 text-[10px] font-bold mt-1 ml-1">{error}</Text>}
+  </View>
+);
+
+const Toggle = ({ label, value, onChange }: any) => (
+  <Pressable onPress={onChange} className="flex-row items-center bg-white border border-slate-200 px-4 py-3 rounded-xl shadow-sm">
+    <Ionicons name={value ? "checkbox" : "square-outline"} size={22} color={value ? "#4f46e5" : "#cbd5e1"} />
+    <Text className={`ml-2 font-bold ${value ? 'text-indigo-700' : 'text-slate-500'}`}>{label}</Text>
+  </Pressable>
+);

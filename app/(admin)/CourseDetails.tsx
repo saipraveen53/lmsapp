@@ -78,7 +78,7 @@ export default function CourseDetails() {
                 >
                     {/* Header Nav */}
                     <Pressable 
-                        onPress={() => router.back()}
+                        onPress={() => router.push("/(admin)/Courses")}
                         className="self-start bg-black/30 backdrop-blur-md px-4 py-2 rounded-full flex-row items-center border border-white/20"
                     >
                         <Ionicons name="arrow-back" size={18} color="white" />

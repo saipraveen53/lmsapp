@@ -34,7 +34,7 @@ export default function Courses() {
   const columns = isDesktop ? 3 : isTablet ? 2 : 1;
   const gap = 20;
   const padding = 24;
-  const cardWidth = (width - (padding * 2) - (gap * (columns - 1))) / columns;
+  const cardWidth = (width - (padding * 2) - (gap * (columns))) / columns;
 
   
 useEffect(() => {
