@@ -65,6 +65,8 @@ export default function Courses() {
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof LectureForm, string>>>({});
 
+  const [lectureMessage, setLectureMessage] = useState<string | null>(null);
+const [lectureMessageType, setLectureMessageType] = useState<"success" | "error" | null>(null);
   const { width } = useWindowDimensions();
   const router = useRouter();
 
@@ -170,41 +172,68 @@ export default function Courses() {
     c.title?.toLowerCase().includes(search.toLowerCase())
   );
   const handleSubmitLecture = async () => {
-    if (!validate()) {
-      Alert.alert("Validation Error", "Please fix the highlighted errors.");
-      return;
-    }
+  setLectureMessage(null);
+  setLectureMessageType(null);
 
-    setSubmitting(true);
-    try {
-      const payload = {
-        courseId: selectedCourseId, 
-        videoLibraryId: parseInt(form.videoLibraryId),
-        videoGuid: form.videoGuid,
-        title: form.title,
-        description: form.description,
-        durationSeconds: parseInt(form.durationSeconds),
-        isPreview: form.isPreview,
-        orderIndex: parseInt(form.orderIndex)
-      };
+  if (!validate()) {
+    setLectureMessage("Please fix the highlighted errors.");
+    setLectureMessageType("error");
+    Alert.alert("Validation Error", "Please fix the highlighted errors.");
+    return;
+  }
 
-      await rootApi.post("http://192.168.0.249:8088/api/videos/link", payload);
-      
-      Alert.alert("Success", "Lecture linked successfully!", [
-        { text: "OK", onPress: closeLectureModal }
-      ]);
-      fetchCourses(); 
+  setSubmitting(true);
+  try {
+    const payload = {
+      courseId: selectedCourseId, 
+      videoLibraryId: parseInt(form.videoLibraryId),
+      videoGuid: form.videoGuid,
+      title: form.title,
+      description: form.description,
+      durationSeconds: parseInt(form.durationSeconds),
+      isPreview: form.isPreview,
+      orderIndex: parseInt(form.orderIndex)
+    };
 
-    } catch (error: any) {
-      console.error("Lecture Creation Error:", error);
-      const msg = error.response?.data?.message || "Failed to link lecture.";
-      Alert.alert("Error", msg);
-    } finally {
-      setSubmitting(false);
-    }
-  };
+    await rootApi.post("http://192.168.0.249:8088/api/videos/link", payload);
 
-  const handleDeleteCourse = (courseId: string) => {
+    setLectureMessage("Lecture linked successfully!");
+    setLectureMessageType("success");
+    Alert.alert("Success", "Lecture linked successfully!", [
+      { text: "OK", onPress: closeLectureModal }
+    ]);
+    fetchCourses(); 
+
+  } catch (error: any) {
+    console.error("Lecture Creation Error:", error);
+    const msg = error.response?.data?.message || "Failed to link lecture.";
+    setLectureMessage(msg);
+    setLectureMessageType("error");
+    Alert.alert("Error", msg);
+  } finally {
+    setSubmitting(false);
+  }
+};
+
+const handleDeleteCourse = (courseId: string) => {
+  // If running on web/desktop, use window.confirm
+  if (Platform.OS === "web") {
+    const confirmed = window.confirm("Are you sure you want to delete this course?");
+    if (!confirmed) return;
+    // Proceed with deletion
+    (async () => {
+      try {
+        await rootApi.delete(`http://192.168.0.249:8088/api/courses/${courseId}`);
+        if (window.alert) window.alert("Course deleted successfully.");
+        fetchCourses();
+      } catch (error: any) {
+        window.alert(error?.response?.data?.message || "Failed to delete course.");
+      }
+    })();
+    return;
+  }
+
+  // Mobile: Use Alert.alert
   Alert.alert(
     "Delete Course",
     "Are you sure you want to delete this course?",
@@ -215,9 +244,9 @@ export default function Courses() {
         style: "destructive",
         onPress: async () => {
           try {
-            await rootApi.delete(`http://192.168.0.249:8088/api/courses/delete/${courseId}`);
+            await rootApi.delete(`http://192.168.0.249:8088/api/courses/${courseId}`);
             Alert.alert("Deleted", "Course deleted successfully.");
-            fetchCourses(); // Refresh the list
+            fetchCourses();
           } catch (error: any) {
             Alert.alert("Error", error.response?.data?.message || "Failed to delete course.");
           }
@@ -503,21 +532,34 @@ export default function Courses() {
 
                     {/* Submit Button */}
                     <TouchableOpacity 
-                        onPress={handleSubmitLecture}
-                        disabled={submitting}
-                        activeOpacity={0.8}
+                      onPress={handleSubmitLecture}
+                      disabled={submitting}
+                      activeOpacity={0.8}
                     >
-                        <LinearGradient
-                            colors={['#4f46e5', '#4338ca']}
-                            className="py-4 rounded-xl items-center shadow-lg shadow-indigo-200"
-                        >
-                            {submitting ? (
-                                <ActivityIndicator color="white" />
-                            ) : (
-                                <Text className="text-white font-bold text-lg">Create Lecture</Text>
-                            )}
-                        </LinearGradient>
+                      <LinearGradient
+                        colors={['#4f46e5', '#4338ca']}
+                        className="py-4 rounded-xl items-center shadow-lg shadow-indigo-200"
+                      >
+                        {submitting ? (
+                          <ActivityIndicator color="white" />
+                        ) : (
+                          <Text className="text-white font-bold text-lg">Create Lecture</Text>
+                        )}
+                      </LinearGradient>
                     </TouchableOpacity>
+                    
+                    {/* Validation Message */}
+                    {lectureMessage && (
+                      <View style={{ marginTop: 12, alignItems: "center" }}>
+                        <Text style={{
+                          color: lectureMessageType === "success" ? "#16a34a" : "#dc2626",
+                          fontWeight: "bold",
+                          fontSize: 15,
+                        }}>
+                          {lectureMessage}
+                        </Text>
+                      </View>
+                    )}
 
                  </ScrollView>
              </View>

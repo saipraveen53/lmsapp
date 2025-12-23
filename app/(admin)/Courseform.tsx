@@ -272,7 +272,7 @@ export default function CourseForm() {
               onPress={() => router.push("/(admin)/Courses")}
               style={{
                 flexDirection: 'row',
-                alignItems: 'center',
+                alignItems: 'flex-start',
                 backgroundColor: 'rgba(255,255,255,0.15)',
                 paddingHorizontal: 12,
                 paddingVertical: 8,
@@ -283,9 +283,9 @@ export default function CourseForm() {
               }}
             >
               <Ionicons name="arrow-back" size={18} color="#fff" />
-              <Text style={{ marginLeft: 8, fontWeight: 'bold', color: '#fff' }}>Back</Text>
+              {/*<Text style={{ marginLeft: 8, fontWeight: 'bold', color: '#fff' }}>Back</Text>*/}
             </Pressable>
-            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#fff', flex: 1, textAlign: 'center' }}>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#fff', flex: 1, textAlign: 'left' }} className=" ml-4">
               Create New Course
             </Text>
             <View style={{ width: 48 }} />
