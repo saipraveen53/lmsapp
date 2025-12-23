@@ -19,7 +19,7 @@ import {
   View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CourseApi } from '../(utils)/axiosInstance';
+import { CourseApi } from '../(utils)/axiosInstance'; //
 
 const logoImg = require('../../assets/images/anasol-logo.png');
 
@@ -38,14 +38,16 @@ const Home = () => {
   // Selection & Enroll State
   const [selectedCourse, setSelectedCourse] = useState<any>(null);
   const [courseModalVisible, setCourseModalVisible] = useState(false);
-  const [enrolledCourseIds, setEnrolledCourseIds] = useState<number[]>([]); 
+  
+  // CHANGED: Store full enrollment objects instead of just IDs
+  const [enrollments, setEnrollments] = useState<any[]>([]); 
   
   // Confirmation Modal State
   const [confirmModalVisible, setConfirmModalVisible] = useState(false);
   const [isEnrolling, setIsEnrolling] = useState(false);
 
   // --- LOGIC: Check if user has ANY enrollment ---
-  const hasAnyEnrollment = enrolledCourseIds.length > 0;
+  const hasAnyEnrollment = enrollments.length > 0;
 
   // --- WEB LAYOUT LOGIC ---
   const sideBarWidth = 400; 
@@ -72,7 +74,6 @@ const Home = () => {
       try {
         let token = await AsyncStorage.getItem("accessToken");
         if (token) {
-          // SANITIZE TOKEN: Remove quotes if present
           token = token.replace(/^"|"$/g, '');
           const decode: any = jwtDecode(token);
           setUserName(decode.sub || "Student");
@@ -100,67 +101,31 @@ const Home = () => {
     fetchCourses();
   }, []);
 
-  // 3. Fetch Enrolled Courses (FIXED FOR ANDROID - TOKEN SANITIZATION)
-  useEffect(() => {
-    const fetchEnrollments = async () => {
+  // 3. Fetch Enrolled Courses (Stores full object with videoLibraryId)
+  const fetchEnrollments = async () => {
+    try {
+      let token = await AsyncStorage.getItem("accessToken");
+      if (!token) return;
+      token = token.replace(/^"|"$/g, '');
+
+      // Explicit Header for Android safety
+      const config = { headers: { 'Authorization': `Bearer ${token}` } };
       
-      // --- ANDROID FIX LOGIC ---
-      if (Platform.OS === 'android') {
-        try {
-          // A. Manual Token Retrieval
-          let token = await AsyncStorage.getItem("accessToken");
-          
-          if (!token) {
-            console.log("--> [Android] No token found.");
-            return;
-          }
+      const response = await CourseApi.get(`/api/courses/my-enrollments`, config);
+      const data = response.data.data || response.data;
+      
+      console.log("Enrollments Data:", data); // Debug log
 
-          // *** CRITICAL FIX: Remove surrounding quotes if they exist ***
-          // Android AsyncStorage sometimes returns "token_string" (with quotes)
-          token = token.replace(/^"|"$/g, '');
-          
-          console.log("--> [Android] Clean Token:", token.substring(0, 600) + "..."); 
-
-          // B. API Call with EXPLICIT Header
-          const response = await CourseApi.get(`/api/courses/my-enrollments`, {
-            headers: {
-              'Authorization': `Bearer ${token}` 
-            }
-          });
-          
-          console.log("--> [Android] Enrollment Success:", response.status);
-          const data = response.data.data || response.data;
-          
-          if (Array.isArray(data)) {
-              const ids = data.map((item: any) => item.courseId);
-              setEnrolledCourseIds(ids);
-          }
-
-        } catch (error: any) {
-          console.error("--> [Android] Enrollment Error:", error.message);
-          if (error.response) {
-             console.error("--> [Android] Server Error Data:", JSON.stringify(error.response.data));
-          }
-        }
-      } 
-      // --- WEB / iOS STANDARD LOGIC ---
-      else {
-        try {
-          // Apply same sanitization for safety on other platforms too
-          let token = await AsyncStorage.getItem("accessToken");
-          const config = token ? { headers: { 'Authorization': `Bearer ${token.replace(/^"|"$/g, '')}` } } : {};
-
-          const response = await CourseApi.get(`/api/courses/my-enrollments`, config);
-          const data = response.data.data || response.data;
-          if (Array.isArray(data)) {
-              const ids = data.map((item: any) => item.courseId);
-              setEnrolledCourseIds(ids);
-          }
-        } catch (error) {
-          console.log("Enrollment fetch error", error);
-        }
+      if (Array.isArray(data)) {
+          // Store the full enrollment object (contains courseId, videoLibraryId, etc.)
+          setEnrollments(data);
       }
+    } catch (error: any) {
+      console.log("Enrollment fetch error", error);
     }
+  };
+
+  useEffect(() => {
     fetchEnrollments();
   }, []);
 
@@ -183,7 +148,6 @@ const Home = () => {
       setConfirmModalVisible(true);
   };
 
-  // Process Enrollment with Token Fix
   const processEnrollment = async () => {
     setConfirmModalVisible(false);
     setIsEnrolling(true); 
@@ -191,9 +155,7 @@ const Home = () => {
     try {
         let token = await AsyncStorage.getItem("accessToken");
         let config = {};
-        
         if (token) {
-            // CRITICAL FIX: Sanitize token here as well
             token = token.replace(/^"|"$/g, '');
             config = { headers: { 'Authorization': `Bearer ${token}` } };
         }
@@ -205,7 +167,8 @@ const Home = () => {
                 { 
                     text: "Start Learning", 
                     onPress: () => {
-                        setEnrolledCourseIds((prev) => [...prev, selectedCourse.courseId]);
+                        // Refresh enrollments to get the new videoLibraryId
+                        fetchEnrollments(); 
                     } 
                 }
             ]);
@@ -219,12 +182,21 @@ const Home = () => {
     }
   };
 
+  // --- UPDATED NAVIGATION LOGIC ---
   const handleContinueLearning = () => {
     if (!isWeb) setCourseModalVisible(false);
-    if (selectedCourse?.libraryId) {
-        router.push({ pathname: "/(videos)/[id]", params: { id: selectedCourse.libraryId } });
+    
+    // Find the enrollment record for the selected course
+    const enrollment = enrollments.find(e => e.courseId === selectedCourse?.courseId);
+    
+    // Extract videoLibraryId
+    const libId = enrollment?.videoLibraryId;
+
+    if (libId) {
+        // Pass the library ID to the dynamic route
+        router.push({ pathname: "/(videos)/[id]", params: { id: libId } });
     } else {
-        Alert.alert("Content Unavailable", "No video content linked.");
+        Alert.alert("Content Unavailable", "No video library linked to this enrollment.");
     }
   };
 
@@ -239,8 +211,10 @@ const Home = () => {
   const CourseDetailsContent = () => {
       if (!selectedCourse) return null;
       
-      const isEnrolled = enrolledCourseIds.includes(selectedCourse.courseId);
-      // Logic: If user has ANY enrollment AND is not enrolled in THIS course -> Locked
+      // Check if enrolled using the new array structure
+      const isEnrolled = enrollments.some(e => e.courseId === selectedCourse.courseId);
+      
+      // Locked logic
       const isLocked = !isEnrolled && hasAnyEnrollment;
 
       return (
@@ -252,7 +226,6 @@ const Home = () => {
                     resizeMode="cover"
                 />
                 
-                {/* DETAILS LOCK OVERLAY - Explicit Styles for Android */}
                 {isLocked && (
                     <View 
                         style={{
@@ -260,7 +233,7 @@ const Home = () => {
                             top: 0, left: 0, right: 0, bottom: 0,
                             backgroundColor: 'rgba(0,0,0,0.6)', 
                             zIndex: 10,
-                            elevation: 10, // Android Elevation
+                            elevation: 10,
                             justifyContent: 'center',
                             alignItems: 'center'
                         }}
@@ -301,7 +274,6 @@ const Home = () => {
 
             {/* ACTION BUTTON LOGIC */}
             {isEnrolled ? (
-                // 1. Enrolled -> Continue
                 <TouchableOpacity 
                     activeOpacity={0.8} 
                     onPress={handleContinueLearning} 
@@ -311,7 +283,6 @@ const Home = () => {
                     <Ionicons name="play-circle" size={20} color="white" />
                 </TouchableOpacity>
             ) : isLocked ? (
-                // 2. Locked -> Disabled Button
                 <TouchableOpacity 
                     activeOpacity={1} 
                     disabled={true}
@@ -321,7 +292,6 @@ const Home = () => {
                     <Text className="text-gray-600 text-center font-bold text-lg tracking-wide ml-2">Locked</Text>
                 </TouchableOpacity>
             ) : (
-                // 3. Available -> Enroll
                 <TouchableOpacity 
                     activeOpacity={0.8} 
                     onPress={initiateEnroll} 
@@ -411,9 +381,9 @@ const Home = () => {
                 {isLoading ? <ActivityIndicator size="large" color="#4F46E5" className="mt-10" /> : (
                     <View style={isWeb ? { flexDirection: 'row', flexWrap: 'wrap', gap: gap } : {}}>
                         {courses.map((course: any) => {
-                            const isEnrolled = enrolledCourseIds.includes(course.courseId);
+                            // Check enrollment against the array of objects
+                            const isEnrolled = enrollments.some(e => e.courseId === course.courseId);
                             const isSelected = isWeb && selectedCourse?.courseId === course.courseId;
-                            // LOCK LOGIC: Locked if NOT enrolled AND user has >=1 enrollment
                             const isLocked = !isEnrolled && hasAnyEnrollment;
                             
                             return (
@@ -441,7 +411,7 @@ const Home = () => {
                                             }`} 
                                         />
                                         
-                                        {/* GRID CARD LOCK OVERLAY - Android Fixed */}
+                                        {/* GRID CARD LOCK OVERLAY */}
                                         {isLocked && (
                                             <View 
                                                 style={{
@@ -471,7 +441,6 @@ const Home = () => {
                                         <View className="flex-row items-center justify-between mt-2 pt-2 border-t border-gray-50">
                                             <Text className="text-indigo-600 font-bold text-sm">{course.isFree ? "Free" : `₹${course.price}`}</Text>
                                             
-                                            {/* ENROLLED BADGE vs LOCKED vs AVAILABLE */}
                                             {isEnrolled ? (
                                                 <View className="flex-row items-center bg-green-50 px-2 py-1 rounded-full">
                                                     <Ionicons name="checkmark-circle" size={12} color="#16a34a" />

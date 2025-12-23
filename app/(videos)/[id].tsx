@@ -1,19 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router'; // Added useRouter for back navigation
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Animated,
-    Dimensions,
-    Image, // Added Image component
-    LayoutAnimation,
-    Platform,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    UIManager,
-    View
+  ActivityIndicator,
+  Animated,
+  Dimensions,
+  Image,
+  LayoutAnimation,
+  Platform,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  UIManager,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
@@ -38,15 +38,16 @@ interface VideoItem {
 }
 
 const VideoListByLibrary = () => {
-  const { id } = useLocalSearchParams();
+  const { id } = useLocalSearchParams(); // This 'id' is now the videoLibraryId passed from Home
+  const router = useRouter();
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentVideo, setCurrentVideo] = useState<string | null>(null);
   
   const scrollY = useRef(new Animated.Value(0)).current;
 
-  // --- FILTER LOGIC (NEW) ---
-  // ప్లే అవుతున్న వీడియోను లిస్ట్ నుండి తొలగించడానికి ఫిల్టర్ వాడుతున్నాం
+  // --- FILTER LOGIC ---
+  // Remove currently playing video from the list
   const displayedVideos = currentVideo 
     ? videos.filter(v => v.guid !== currentVideo) 
     : videos;
@@ -66,13 +67,16 @@ const VideoListByLibrary = () => {
   // --- FETCH DATA ---
   useEffect(() => {
     const fetchVideos = async () => {
+      if (!id) return;
+
       try {
+        // UPDATED: Using dynamic 'id' (Library ID) instead of hardcoded value
         const response = await fetch(
-          `https://video.bunnycdn.com/library/${id}/videos?page=1&itemsPerPage=100&orderBy=date`, 
+          `https://video.bunnycdn.com/library/${id}/videos`, 
           {
             method: "GET",
             headers: {
-              AccessKey: "ede9a48d-c2a3-425b-ac0d96863d1b-f95c-4f46", 
+              AccessKey: "ede9a48d-c2a3-425b-ac0d96863d1b-f95c-4f46", // Consider moving this to env variables
               Accept: "application/json",
             },
           }
@@ -87,11 +91,10 @@ const VideoListByLibrary = () => {
         setLoading(false);
       }
     };
-    if (id) fetchVideos();
+    fetchVideos();
   }, [id]);
 
   const handleVideoPress = (guid: string) => {
-    // లిస్ట్ అప్‌డేట్ అయ్యేటప్పుడు స్మూత్ యానిమేషన్ కోసం
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setCurrentVideo(guid);
   };
@@ -99,6 +102,7 @@ const VideoListByLibrary = () => {
   const renderPlayer = () => {
     if (!currentVideo) return null;
 
+    // Using dynamic 'id' for the embed URL as well
     const embedUrl = `https://iframe.mediadelivery.net/embed/${id}/${currentVideo}?autoplay=true`;
 
     return (
@@ -154,14 +158,16 @@ const VideoListByLibrary = () => {
       {/* 2. HEADER */}
       {!currentVideo && (
         <View style={styles.header}>
-            <Text style={styles.headerTitle}>Videos</Text>
-             
+            <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 10 }}>
+                <Ionicons name="arrow-back" size={24} color="#0f172a" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Course Videos</Text>
         </View>
       )}
 
       {/* 3. VIDEO LIST (Filtered) */}
       <Animated.FlatList
-        data={displayedVideos} // Use filtered list
+        data={displayedVideos} 
         keyExtractor={(item) => item.guid}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
@@ -184,10 +190,11 @@ const VideoListByLibrary = () => {
                   onPress={() => handleVideoPress(item.guid)}
                   style={styles.card}
                 >
-                  {/* --- STATIC THUMBNAIL (Same for all) --- */}
+                  {/* --- STATIC THUMBNAIL --- */}
                   <View style={styles.thumbnailContainer}>
+                     {/* You might want to use item.thumbnailFileName if available, constructed with CDN URL */}
                      <Image 
-                        source={{ uri: "https://img.freepik.com/free-vector/gradient-ui-ux-background_23-2149052117.jpg" }} // Fixed Image
+                        source={{ uri: "https://img.freepik.com/free-vector/gradient-ui-ux-background_23-2149052117.jpg" }} 
                         style={styles.thumbnailImage}
                         resizeMode="cover"
                      />
@@ -273,17 +280,6 @@ const styles = StyleSheet.create({
     color: '#0f172a',
     marginRight: 8,
   },
-  headerBadge: {
-    backgroundColor: '#f1f5f9',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-  },
-  headerBadgeText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#64748b',
-  },
 
   // Player
   playerWrapper: {
@@ -328,7 +324,7 @@ const styles = StyleSheet.create({
     aspectRatio: 16 / 9,
     position: 'relative',
     marginBottom: 12,
-    backgroundColor: '#f1f5f9', // fallback color
+    backgroundColor: '#f1f5f9',
   },
   thumbnailImage: {
     width: '100%',
@@ -342,7 +338,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.1)', // slight darken
+    backgroundColor: 'rgba(0,0,0,0.1)',
   },
   durationBadge: {
     position: 'absolute',
