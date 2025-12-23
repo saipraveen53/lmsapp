@@ -4,16 +4,22 @@ import { useRouter } from 'expo-router';
 import { jwtDecode } from 'jwt-decode';
 import React, { useEffect, useState } from 'react';
 import {
-  Alert,
-  Image,
-  Platform, // <--- 1. Import Platform here
-  ScrollView,
-  StatusBar,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Image,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    ScrollView,
+    StatusBar,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import api from '../(utils)/api'; // Make sure api is imported
 
 const MyProfile = () => {
     const router = useRouter();
@@ -22,6 +28,15 @@ const MyProfile = () => {
         role: "Student",
         email: ""
     });
+
+    // --- PASSWORD CHANGE STATE ---
+    const [modalVisible, setModalVisible] = useState(false);
+    const [passData, setPassData] = useState({ old: '', new: '', confirm: '' });
+    const [isLoading, setIsLoading] = useState(false);
+    // Visibility Toggles
+    const [showOld, setShowOld] = useState(false);
+    const [showNew, setShowNew] = useState(false);
+    const [showConfirm, setShowConfirm] = useState(false);
 
     useEffect(() => {
         const fetchUser = async () => {
@@ -42,7 +57,42 @@ const MyProfile = () => {
         fetchUser();
     }, []);
 
-    // 2. Separate logic for actual logout action (Reusable)
+    // --- CHANGE PASSWORD LOGIC ---
+    const handleChangePassword = async () => {
+        // Validation
+        if (!passData.old.trim() || !passData.new.trim() || !passData.confirm.trim()) {
+            Alert.alert("Validation Error", "All fields are required.");
+            return;
+        }
+        if (passData.new !== passData.confirm) {
+            Alert.alert("Validation Error", "New password and Confirm password do not match.");
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            // Using the same endpoint as Admin
+            const response = await api.post('/api/auth/change-password', { 
+               oldPassword: passData.old, 
+               newPassword: passData.new,
+               confirmPassword: passData.confirm 
+            });
+            
+            Alert.alert("Success", response.data?.message || "Password Changed Successfully!");
+            
+            // Reset & Close
+            setModalVisible(false);
+            setPassData({ old: '', new: '', confirm: '' });
+        } catch (error: any) {
+            console.log("Change Pass Error:", error.response?.data);
+            const msg = error.response?.data?.message || "Failed to update password. Please try again.";
+            Alert.alert("Update Failed", msg);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Separate logic for actual logout action (Reusable)
     const performLogout = async () => {
         try {
             await AsyncStorage.removeItem("accessToken");
@@ -53,16 +103,14 @@ const MyProfile = () => {
         }
     };
 
-    // 3. Modified Handle Logout for Web & Mobile
+    // Modified Handle Logout for Web & Mobile
     const handleLogout = async () => {
         if (Platform.OS === 'web') {
-            // Web browser specific confirmation
             const confirm = window.confirm("Are you sure you want to log out?");
             if (confirm) {
                 await performLogout();
             }
         } else {
-            // Mobile (Android/iOS) Native Alert
             Alert.alert(
                 "Confirm Logout",
                 "Are you sure you want to log out?",
@@ -71,7 +119,7 @@ const MyProfile = () => {
                     {
                         text: "Logout",
                         style: "destructive",
-                        onPress: performLogout // Calls the function above
+                        onPress: performLogout
                     }
                 ]
             );
@@ -130,15 +178,20 @@ const MyProfile = () => {
                     </View>
                 </View>
 
-                {/* SETTINGS OPTIONS (Dummy) */}
+                {/* SETTINGS OPTIONS */}
                 <View className="bg-white rounded-2xl shadow-sm mb-8">
-                    <TouchableOpacity className="p-4 border-b border-gray-100 flex-row items-center justify-between">
+                    {/* Updated to Trigger Modal */}
+                    <TouchableOpacity 
+                        onPress={() => setModalVisible(true)}
+                        className="p-4 border-b border-gray-100 flex-row items-center justify-between"
+                    >
                         <View className="flex-row items-center">
-                            <Ionicons name="settings-outline" size={20} color="#4f46e5" />
-                            <Text className="ml-3 text-gray-700 font-medium">Account Settings</Text>
+                            <Ionicons name="key-outline" size={20} color="#4f46e5" />
+                            <Text className="ml-3 text-gray-700 font-medium">Change Password</Text>
                         </View>
                         <Ionicons name="chevron-forward" size={18} color="#cbd5e1" />
                     </TouchableOpacity>
+
                     <TouchableOpacity className="p-4 flex-row items-center justify-between">
                         <View className="flex-row items-center">
                             <Ionicons name="notifications-outline" size={20} color="#f59e0b" />
@@ -160,6 +213,98 @@ const MyProfile = () => {
                 <Text className="text-center text-gray-400 text-xs mt-6">App Version 1.0.0</Text>
 
             </ScrollView>
+
+            {/* --- CHANGE PASSWORD MODAL --- */}
+            <Modal animationType="slide" transparent={true} visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
+                <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1 justify-center items-center bg-black/60 px-4">
+                    <TouchableWithoutFeedback onPress={() => setModalVisible(false)}>
+                        <View className="absolute top-0 bottom-0 left-0 right-0" />
+                    </TouchableWithoutFeedback>
+
+                    <View className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl">
+                        
+                        <View className="items-center mb-6">
+                            <View className="w-14 h-14 bg-indigo-50 rounded-full items-center justify-center mb-2">
+                                <Ionicons name="lock-closed" size={24} color="#4338ca" />
+                            </View>
+                            <Text className="text-xl font-bold text-gray-800">Change Password</Text>
+                            <Text className="text-xs text-gray-400">Secure your account</Text>
+                        </View>
+
+                        <View className="space-y-4">
+                            {/* OLD PASS */}
+                            <View>
+                                <Text className="text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Old Password</Text>
+                                <View className="flex-row items-center bg-gray-50 border border-gray-200 rounded-xl px-3 h-12">
+                                    <TextInput 
+                                        secureTextEntry={!showOld}
+                                        value={passData.old}
+                                        onChangeText={(t) => setPassData({...passData, old: t})}
+                                        placeholder="Enter old password"
+                                        className="flex-1 text-gray-800 text-sm h-full"
+                                        style={{ outlineStyle: 'none' } as any}
+                                    />
+                                    <TouchableOpacity onPress={() => setShowOld(!showOld)} style={{ padding: 5 }}>
+                                        <Ionicons name={showOld ? "eye-off-outline" : "eye-outline"} size={20} color="#9ca3af" />
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+
+                            {/* NEW PASS */}
+                            <View>
+                                <Text className="text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">New Password</Text>
+                                <View className="flex-row items-center bg-gray-50 border border-gray-200 rounded-xl px-3 h-12">
+                                    <TextInput 
+                                        secureTextEntry={!showNew}
+                                        value={passData.new}
+                                        onChangeText={(t) => setPassData({...passData, new: t})}
+                                        placeholder="Enter new password"
+                                        className="flex-1 text-gray-800 text-sm h-full"
+                                        style={{ outlineStyle: 'none' } as any}
+                                    />
+                                    <TouchableOpacity onPress={() => setShowNew(!showNew)} style={{ padding: 5 }}>
+                                        <Ionicons name={showNew ? "eye-off-outline" : "eye-outline"} size={20} color="#9ca3af" />
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+
+                            {/* CONFIRM PASS */}
+                            <View>
+                                <Text className="text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Confirm Password</Text>
+                                <View className="flex-row items-center bg-gray-50 border border-gray-200 rounded-xl px-3 h-12 mb-4">
+                                    <TextInput 
+                                        secureTextEntry={!showConfirm}
+                                        value={passData.confirm}
+                                        onChangeText={(t) => setPassData({...passData, confirm: t})}
+                                        placeholder="Confirm new password"
+                                        className="flex-1 text-gray-800 text-sm h-full"
+                                        style={{ outlineStyle: 'none' } as any}
+                                    />
+                                    <TouchableOpacity onPress={() => setShowConfirm(!showConfirm)} style={{ padding: 5 }}>
+                                        <Ionicons name={showConfirm ? "eye-off-outline" : "eye-outline"} size={20} color="#9ca3af" />
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        </View>
+
+                        <View className="flex-row gap-3">
+                            <TouchableOpacity onPress={() => setModalVisible(false)} className="flex-1 py-3 bg-gray-100 rounded-xl items-center">
+                                <Text className="font-bold text-gray-600">Cancel</Text>
+                            </TouchableOpacity>
+                            
+                            <TouchableOpacity 
+                                onPress={handleChangePassword} 
+                                disabled={isLoading} 
+                                activeOpacity={0.8}
+                                className="flex-1 bg-indigo-600 rounded-xl items-center justify-center py-3"
+                            >
+                                {isLoading ? <ActivityIndicator color="white" size="small" /> : <Text className="font-bold text-white">Update</Text>}
+                            </TouchableOpacity>
+                        </View>
+
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
         </SafeAreaView>
     );
 };
