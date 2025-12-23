@@ -12,6 +12,7 @@ import {
   useWindowDimensions,
   View
 } from "react-native";
+import { rootApi } from "../(utils)/axiosInstance";
 // import "../globals.css"; // Ensure this is uncommented in your project
 
 // --- TYPES & DATA (UNCHANGED) ---
@@ -41,6 +42,7 @@ export default function Dashboard() {
   const containerPadding = 30;
   const availableWidth = width - (containerPadding * 2);
 
+  const [totalCourses, setTotalCourses] = useState<number>(0);
   let cardWidth = 0;
   if (isDesktop) {
     // 4 columns: (Total - 3 gaps) / 4
@@ -77,6 +79,14 @@ export default function Dashboard() {
 
   const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
+useEffect(() => {
+  rootApi
+    .get("http://192.168.0.249:8088/api/courses/count")
+    .then((res) => {
+      setTotalCourses(res.data?.data || 0);
+    })
+    .catch(() => setTotalCourses(0));
+}, []);
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
       <StatusBar barStyle="dark-content" backgroundColor="#f8fafc" />
@@ -114,7 +124,7 @@ export default function Dashboard() {
         <View className="flex-row flex-wrap" style={{ gap: gap }}>
           <StatCard 
             title="Total Courses" 
-            value={stats.totalCourses} 
+            value={totalCourses} // <-- Use fetched value here
             icon="school-outline" 
             theme="indigo"
             width={cardWidth} 
