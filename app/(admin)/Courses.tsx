@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import axios from "axios";
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -13,6 +12,7 @@ import {
   View,
   useWindowDimensions
 } from "react-native";
+import { rootApi } from "../(utils)/axiosInstance";
 import "../globals.css";
 
 // --- HELPER: Get Image (Network Fallback) ---
@@ -36,14 +36,15 @@ export default function Courses() {
   const padding = 24;
   const cardWidth = (width - (padding * 2) - (gap * (columns - 1))) / columns;
 
-  useEffect(() => {
-    axios.get("http://192.168.0.249:8088/api/courses")
-      .then(res => {
-        setCourses(res.data.data || []);
-      })
-      .catch(() => setCourses([]))
-      .finally(() => setLoading(false));
-  }, []);
+  
+useEffect(() => {
+  rootApi.get("http://192.168.0.249:8088/api/courses")
+    .then(res => {
+      setCourses(res.data.data || []);
+    })
+    .catch(() => setCourses([]))
+    .finally(() => setLoading(false));
+}, []);
 
   const openCreate = () => { /* Modal Logic */ };
 
