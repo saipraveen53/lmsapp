@@ -9,7 +9,8 @@ import {
   StatusBar,
   Text, TouchableOpacity, View
 } from 'react-native';
-import api from '../(utils)/api'; // Ensure this points to your configured axios instance
+// Importing QuizApi from axiosInstance
+import { QuizApi } from '../(utils)/axiosInstance';
 
 export default function BulkQuizUpload() {
   const router = useRouter();
@@ -20,7 +21,7 @@ export default function BulkQuizUpload() {
   const [fileName, setFileName] = useState<string | null>(null);
   
   // Toggle: Grand Test vs Lecture Quiz
-  // Default is FALSE (Lecture Quiz) as per request
+  // Default is FALSE (Lecture Quiz)
   const [isGrandTest, setIsGrandTest] = useState(false); 
 
   // Lecture Selection State
@@ -101,6 +102,7 @@ export default function BulkQuizUpload() {
           if (ansLetter === 'B') correctOption = options[1];
           else if (ansLetter === 'C') correctOption = options[2];
           else if (ansLetter === 'D') correctOption = options[3];
+          
           parsedQuestions.push({ questionText, options, correctOption });
         }
       });
@@ -128,25 +130,52 @@ export default function BulkQuizUpload() {
 
     setIsLoading(true);
     try {
-        const payload = {
-            courseId, 
-            isGrandTest,
-            // If it's a lecture quiz, send the lectureId. 
-            lectureId: isGrandTest ? null : selectedLecture.id, 
-            moduleName: isGrandTest ? null : selectedLecture.title,
-            questions
+        // --- MAP QUESTIONS TO DTO ---
+        const mappedQuestions = questions.map(q => {
+            const correctIndex = q.options.indexOf(q.correctOption);
+            const validIndex = correctIndex !== -1 ? correctIndex : 0;
+
+            return {
+                questionText: q.questionText,
+                questionType: "MCQ", 
+                marks: 1, 
+                options: q.options,
+                correctOptionIndexes: [validIndex] // List<Integer>
+            };
+        });
+
+        const totalMarks = mappedQuestions.reduce((sum, q) => sum + q.marks, 0);
+
+        // --- CREATE SINGLE QUIZ OBJECT ---
+        const quizDTO = {
+            courseId: Number(courseId),
+            quizType: isGrandTest ? "GRAND" : "LECTURE",
+            lectureId: isGrandTest ? null : selectedLecture.id,
+            totalMarks: totalMarks,
+            questions: mappedQuestions
         };
         
-        console.log("Uploading Payload:", payload);
+        // --- WRAP IN ARRAY ---
+        const payload = [ quizDTO ];
         
-        // This is your submit endpoint
-        await api.post('/api/quiz/bulk-create', payload); 
+        console.log("Uploading Payload:", JSON.stringify(payload, null, 2));
+        
+        // Using QuizApi (Port 8082)
+        await QuizApi.post('/api/quizzes/bulk', payload); 
+        
+        // --- SUCCESS HANDLING: CLEAR DATA & SHOW ALERT ---
+        setQuestions([]); 
+        setFileName(null);
+        setSelectedLecture(null);
         
         Alert.alert('Success', 'Quiz Uploaded Successfully!', [
             { text: 'OK', onPress: () => router.push('/(admin)/Courses') }
         ]);
     } catch (error: any) {
       console.log("Upload Error:", error);
+      if (error.response) {
+          console.log("Response Data:", error.response.data);
+      }
       Alert.alert('Failed', error.response?.data?.message || 'Upload failed.');
     } finally {
       setIsLoading(false);
@@ -174,9 +203,8 @@ export default function BulkQuizUpload() {
       {/* BODY */}
       <View className="flex-1 px-5 pt-6">
         
-        {/* Toggle Switch: Left = Lecture Quiz, Right = Grand Test */}
+        {/* Toggle Switch */}
         <View className="flex-row bg-white p-1 rounded-xl border border-slate-200 mb-5">
-          {/* LEFT: Lecture Quiz (Default) */}
           <TouchableOpacity 
             onPress={() => setIsGrandTest(false)} 
             className={`flex-1 py-2.5 rounded-lg items-center ${!isGrandTest ? 'bg-indigo-600' : ''}`}
@@ -184,7 +212,6 @@ export default function BulkQuizUpload() {
              <Text className={`font-bold text-xs ${!isGrandTest ? 'text-white' : 'text-slate-500'}`}>📹 Lecture Quiz</Text>
           </TouchableOpacity>
 
-          {/* RIGHT: Grand Test */}
           <TouchableOpacity 
             onPress={() => setIsGrandTest(true)} 
             className={`flex-1 py-2.5 rounded-lg items-center ${isGrandTest ? 'bg-indigo-600' : ''}`}
@@ -237,7 +264,7 @@ export default function BulkQuizUpload() {
             </View>
         )}
 
-        {/* SUBMIT BUTTON (Shows after questions are loaded) */}
+        {/* SUBMIT BUTTON */}
         {questions.length > 0 && (
             <TouchableOpacity onPress={handleUpload} disabled={isLoading} className="mb-6">
                 <LinearGradient colors={['#10b981', '#059669']} className="p-4 rounded-xl items-center shadow-md">
