@@ -17,7 +17,7 @@ const getToken = async (): Promise<string | null> => {
 const createAxiosInstance = (baseURL: string): AxiosInstance => {
   const instance: AxiosInstance = axios.create({
     baseURL: baseURL,
-    timeout: 30000,  // Increased to 30 seconds to prevent "Canceled" errors
+    timeout: 30000, 
     headers: {
       'Content-Type': 'application/json',
     },
@@ -28,7 +28,6 @@ const createAxiosInstance = (baseURL: string): AxiosInstance => {
       const token: string | null = await getToken();
       
       if (token) {
-        // Remove quotes if present to avoid 401/403 errors
         const cleanToken = token.replace(/^"|"$/g, '');
         config.headers.Authorization = `Bearer ${cleanToken}`;
       }
@@ -40,9 +39,6 @@ const createAxiosInstance = (baseURL: string): AxiosInstance => {
   return instance;
 };
 
-// Existing Services
 export const rootApi: AxiosInstance = createAxiosInstance("http://192.168.0.130:8080");
 export const CourseApi: AxiosInstance = createAxiosInstance("http://192.168.0.249:8088");
-
-// NEW: Quiz Microservice (Port 8081)
 export const QuizApi: AxiosInstance = createAxiosInstance("http://192.168.0.130:8082");
