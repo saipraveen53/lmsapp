@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios, {
-    AxiosError,
-    AxiosInstance,
-    InternalAxiosRequestConfig,
+  AxiosError,
+  AxiosInstance,
+  InternalAxiosRequestConfig,
 } from 'axios';
  
 
@@ -41,3 +41,4 @@ const createAxiosInstance = (baseURL: string): AxiosInstance => {
 };
 
 export const rootApi: AxiosInstance = createAxiosInstance("http://192.168.0.216:8080");
+export const CourseApi: AxiosInstance = createAxiosInstance("http://192.168.0.249:8088");
