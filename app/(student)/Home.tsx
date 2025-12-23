@@ -5,21 +5,21 @@ import { useRouter } from 'expo-router';
 import { jwtDecode } from 'jwt-decode';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Modal,
-  Platform,
-  ScrollView,
-  StatusBar,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  useWindowDimensions,
-  View
+    ActivityIndicator,
+    Alert,
+    Image,
+    Modal,
+    Platform,
+    ScrollView,
+    StatusBar,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    useWindowDimensions,
+    View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CourseApi } from '../(utils)/axiosInstance'; //
+import { CourseApi } from '../(utils)/axiosInstance';
 
 const logoImg = require('../../assets/images/anasol-logo.png');
 
@@ -39,14 +39,12 @@ const Home = () => {
   const [selectedCourse, setSelectedCourse] = useState<any>(null);
   const [courseModalVisible, setCourseModalVisible] = useState(false);
   
-  // CHANGED: Store full enrollment objects instead of just IDs
   const [enrollments, setEnrollments] = useState<any[]>([]); 
   
   // Confirmation Modal State
   const [confirmModalVisible, setConfirmModalVisible] = useState(false);
   const [isEnrolling, setIsEnrolling] = useState(false);
 
-  // --- LOGIC: Check if user has ANY enrollment ---
   const hasAnyEnrollment = enrollments.length > 0;
 
   // --- WEB LAYOUT LOGIC ---
@@ -101,23 +99,19 @@ const Home = () => {
     fetchCourses();
   }, []);
 
-  // 3. Fetch Enrolled Courses (Stores full object with videoLibraryId)
+  // 3. Fetch Enrolled Courses
   const fetchEnrollments = async () => {
     try {
       let token = await AsyncStorage.getItem("accessToken");
       if (!token) return;
       token = token.replace(/^"|"$/g, '');
 
-      // Explicit Header for Android safety
       const config = { headers: { 'Authorization': `Bearer ${token}` } };
       
       const response = await CourseApi.get(`/api/courses/my-enrollments`, config);
       const data = response.data.data || response.data;
       
-      console.log("Enrollments Data:", data); // Debug log
-
       if (Array.isArray(data)) {
-          // Store the full enrollment object (contains courseId, videoLibraryId, etc.)
           setEnrollments(data);
       }
     } catch (error: any) {
@@ -167,7 +161,6 @@ const Home = () => {
                 { 
                     text: "Start Learning", 
                     onPress: () => {
-                        // Refresh enrollments to get the new videoLibraryId
                         fetchEnrollments(); 
                     } 
                 }
@@ -186,15 +179,18 @@ const Home = () => {
   const handleContinueLearning = () => {
     if (!isWeb) setCourseModalVisible(false);
     
-    // Find the enrollment record for the selected course
     const enrollment = enrollments.find(e => e.courseId === selectedCourse?.courseId);
-    
-    // Extract videoLibraryId
     const libId = enrollment?.videoLibraryId;
 
     if (libId) {
-        // Pass the library ID to the dynamic route
-        router.push({ pathname: "/(videos)/[id]", params: { id: libId } });
+        // PASSING courseId ALONG WITH libId (Updated Logic)
+        router.push({ 
+            pathname: "/(videos)/[id]", 
+            params: { 
+                id: libId, 
+                courseId: selectedCourse.courseId // Essential for fetching Quizzes
+            } 
+        });
     } else {
         Alert.alert("Content Unavailable", "No video library linked to this enrollment.");
     }
@@ -207,14 +203,10 @@ const Home = () => {
       return `${h}h ${m}m`;
   };
 
-  // --- COURSE DETAILS COMPONENT ---
   const CourseDetailsContent = () => {
       if (!selectedCourse) return null;
       
-      // Check if enrolled using the new array structure
       const isEnrolled = enrollments.some(e => e.courseId === selectedCourse.courseId);
-      
-      // Locked logic
       const isLocked = !isEnrolled && hasAnyEnrollment;
 
       return (
@@ -229,13 +221,9 @@ const Home = () => {
                 {isLocked && (
                     <View 
                         style={{
-                            position: 'absolute',
-                            top: 0, left: 0, right: 0, bottom: 0,
-                            backgroundColor: 'rgba(0,0,0,0.6)', 
-                            zIndex: 10,
-                            elevation: 10,
-                            justifyContent: 'center',
-                            alignItems: 'center'
+                            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                            backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 10, elevation: 10,
+                            justifyContent: 'center', alignItems: 'center'
                         }}
                     >
                         <Ionicons name="lock-closed" size={40} color="rgba(255,255,255,0.9)" />
@@ -260,19 +248,6 @@ const Home = () => {
             <Text className="text-lg font-bold text-gray-900 mb-2">About Course</Text>
             <Text className="text-gray-600 leading-7 mb-6 text-sm">{selectedCourse.description}</Text>
 
-            <Text className="text-lg font-bold text-gray-900 mb-3">What You'll Learn</Text>
-            <View className="bg-gray-50 p-4 rounded-xl mb-6 border border-gray-100 hover:border-indigo-200 transition-colors duration-300">
-                    {selectedCourse.whatYouWillLearn ? (
-                    selectedCourse.whatYouWillLearn.split(',').map((item: string, index: number) => (
-                        <View key={index} className="flex-row items-center mb-2.5">
-                                <Text className="text-green-500 mr-2">✓</Text>
-                                <Text className="text-gray-700 font-medium text-sm">{item.trim()}</Text>
-                        </View>
-                    ))
-                    ) : (<Text className="text-gray-500 italic">Details not available</Text>)}
-            </View>
-
-            {/* ACTION BUTTON LOGIC */}
             {isEnrolled ? (
                 <TouchableOpacity 
                     activeOpacity={0.8} 
@@ -284,8 +259,7 @@ const Home = () => {
                 </TouchableOpacity>
             ) : isLocked ? (
                 <TouchableOpacity 
-                    activeOpacity={1} 
-                    disabled={true}
+                    activeOpacity={1} disabled={true}
                     className="bg-gray-300 py-4 rounded-xl mt-2 mb-8 flex-row justify-center items-center border border-gray-300"
                 >
                     <Ionicons name="lock-closed" size={20} color="#6b7280" />
@@ -293,9 +267,7 @@ const Home = () => {
                 </TouchableOpacity>
             ) : (
                 <TouchableOpacity 
-                    activeOpacity={0.8} 
-                    onPress={initiateEnroll} 
-                    disabled={isEnrolling} 
+                    activeOpacity={0.8} onPress={initiateEnroll} disabled={isEnrolling} 
                     className="bg-green-600 py-4 rounded-xl shadow-lg shadow-green-200 mt-2 mb-8 hover:bg-green-700 active:scale-95 transition-all duration-200 flex-row justify-center items-center"
                 >
                     {isEnrolling ? (
@@ -314,19 +286,11 @@ const Home = () => {
 
   return (
     <View className="flex-1 bg-gray-50"> 
-      <StatusBar 
-        barStyle="light-content" 
-        backgroundColor="transparent" 
-        translucent={true} 
-      />
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={true} />
 
-      {/* HEADER */}
       <LinearGradient
         colors={['#4338ca', '#e11d48']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-        style={{ 
-          paddingTop: isWeb ? 16 : insets.top + 5, 
-          paddingBottom: isWeb ? 16 : 15 
-        }} 
+        style={{ paddingTop: isWeb ? 16 : insets.top + 5, paddingBottom: isWeb ? 16 : 15 }} 
         className={`shadow-md z-20 ${isWeb ? 'px-8 w-full' : 'rounded-b-3xl px-5'}`}
       >
         {isWeb ? (
@@ -362,26 +326,16 @@ const Home = () => {
         )}
       </LinearGradient>
 
-      {/* --- CONTENT AREA --- */}
       <View className="flex-1 flex-row bg-gray-50 w-full overflow-hidden">
-          
-          <ScrollView 
-            className="flex-1" 
-            showsVerticalScrollIndicator={false} 
-            contentContainerStyle={{ paddingBottom: 100 }}
-          >
+          <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
              <View className={`w-full ${isWeb ? 'px-6 pt-6' : 'px-5 pt-6'}`}>
-                
                 <View className="flex-row justify-between items-center mb-4">
-                    <Text className="text-xl font-bold text-gray-800">
-                        {isSidebarOpen ? "Select a Course" : "All Available Courses"}
-                    </Text>
+                    <Text className="text-xl font-bold text-gray-800">{isSidebarOpen ? "Select a Course" : "All Available Courses"}</Text>
                 </View>
 
                 {isLoading ? <ActivityIndicator size="large" color="#4F46E5" className="mt-10" /> : (
                     <View style={isWeb ? { flexDirection: 'row', flexWrap: 'wrap', gap: gap } : {}}>
                         {courses.map((course: any) => {
-                            // Check enrollment against the array of objects
                             const isEnrolled = enrollments.some(e => e.courseId === course.courseId);
                             const isSelected = isWeb && selectedCourse?.courseId === course.courseId;
                             const isLocked = !isEnrolled && hasAnyEnrollment;
@@ -392,55 +346,24 @@ const Home = () => {
                                     onPress={() => handleCoursePress(course)}
                                     activeOpacity={0.8}
                                     style={isWeb ? { width: Math.floor(cardWidth) } : { width: '100%' }} 
-                                    className={`
-                                      bg-white rounded-2xl shadow-sm border group
-                                      ${isSelected ? 'border-indigo-600 border-2 shadow-indigo-200 shadow-md scale-[1.02]' : 'border-gray-100'} 
-                                      ${isWeb 
-                                        ? 'flex-col overflow-hidden mb-0 pb-3 transition-all duration-300 ease-out hover:scale-[1.03] hover:shadow-2xl hover:border-indigo-200 active:scale-95' 
-                                        : 'flex-row p-3 mb-4'
-                                      }
-                                    `}
+                                    className={`bg-white rounded-2xl shadow-sm border group ${isSelected ? 'border-indigo-600 border-2 shadow-indigo-200 shadow-md scale-[1.02]' : 'border-gray-100'} ${isWeb ? 'flex-col overflow-hidden mb-0 pb-3 transition-all duration-300 ease-out hover:scale-[1.03] hover:shadow-2xl hover:border-indigo-200 active:scale-95' : 'flex-row p-3 mb-4'}`}
                                 >
-                                    {/* CARD IMAGE */}
                                     <View className="overflow-hidden relative">
-                                        <Image source={{ uri: course.thumbnailUrl || "https://img.freepik.com/free-vector/laptop-with-program-code-isometric-icon-software-development-programming-applications-dark-neon_39422-971.jpg" }} resizeMode="cover" 
-                                            className={`${
-                                                isWeb 
-                                                ? (isSidebarOpen ? 'w-full h-36 bg-gray-100 transition-transform duration-500 group-hover:scale-110' : 'w-full h-52 bg-gray-100 transition-transform duration-500 group-hover:scale-110')
-                                                : 'w-24 h-24 rounded-xl bg-gray-100'
-                                            }`} 
-                                        />
-                                        
-                                        {/* GRID CARD LOCK OVERLAY */}
+                                        <Image source={{ uri: course.thumbnailUrl || "https://img.freepik.com/free-vector/laptop-with-program-code-isometric-icon-software-development-programming-applications-dark-neon_39422-971.jpg" }} resizeMode="cover" className={`${isWeb ? (isSidebarOpen ? 'w-full h-36 bg-gray-100 transition-transform duration-500 group-hover:scale-110' : 'w-full h-52 bg-gray-100 transition-transform duration-500 group-hover:scale-110') : 'w-24 h-24 rounded-xl bg-gray-100'}`} />
                                         {isLocked && (
-                                            <View 
-                                                style={{
-                                                    position: 'absolute',
-                                                    top: 0, left: 0, right: 0, bottom: 0,
-                                                    backgroundColor: 'rgba(0,0,0,0.6)',
-                                                    zIndex: 10,
-                                                    elevation: 10,
-                                                    justifyContent: 'center',
-                                                    alignItems: 'center',
-                                                    borderRadius: isWeb ? 0 : 12 
-                                                }}
-                                            >
+                                            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 10, elevation: 10, justifyContent: 'center', alignItems: 'center', borderRadius: isWeb ? 0 : 12 }}>
                                                 <Ionicons name="lock-closed" size={isWeb ? 32 : 24} color="rgba(255,255,255,0.9)" />
                                             </View>
                                         )}
                                     </View>
-                                    
                                     <View className={`${isWeb ? 'px-4 pt-3 flex-1' : 'flex-1 ml-3 justify-center'}`}>
                                         <View className="flex-row justify-between items-start mb-1">
                                             <Text className="text-blue-600 text-[10px] font-bold uppercase">{course.level || "Course"}</Text>
                                             <Text className="text-gray-600 text-[10px] font-bold">★ {course.rating || "New"}</Text>
                                         </View>
-                                        <Text className={`font-bold text-gray-900 mb-1 leading-tight ${isSidebarOpen ? 'text-sm' : 'text-lg'}`} numberOfLines={2}>
-                                            {course.title}
-                                        </Text>
+                                        <Text className={`font-bold text-gray-900 mb-1 leading-tight ${isSidebarOpen ? 'text-sm' : 'text-lg'}`} numberOfLines={2}>{course.title}</Text>
                                         <View className="flex-row items-center justify-between mt-2 pt-2 border-t border-gray-50">
                                             <Text className="text-indigo-600 font-bold text-sm">{course.isFree ? "Free" : `₹${course.price}`}</Text>
-                                            
                                             {isEnrolled ? (
                                                 <View className="flex-row items-center bg-green-50 px-2 py-1 rounded-full">
                                                     <Ionicons name="checkmark-circle" size={12} color="#16a34a" />
@@ -461,23 +384,14 @@ const Home = () => {
              </View>
           </ScrollView>
 
-          {/* RIGHT SIDE: DETAILS PANEL (WEB ONLY) */}
           {isWeb && (
-            <View 
-                className={`bg-white border-l border-gray-200 h-full shadow-2xl z-30 transition-all duration-500 ease-in-out overflow-hidden`}
-                style={{ width: isSidebarOpen ? sideBarWidth : 0 }}
-            >
+            <View className={`bg-white border-l border-gray-200 h-full shadow-2xl z-30 transition-all duration-500 ease-in-out overflow-hidden`} style={{ width: isSidebarOpen ? sideBarWidth : 0 }}>
                 <View style={{ width: sideBarWidth, height: '100%', padding: 24 }}>
                     {selectedCourse && (
                         <>
                             <View className="flex-row justify-between items-center mb-4 pb-4 border-b border-gray-100">
                                 <Text className="text-xl font-bold text-gray-800">Course Details</Text>
-                                <TouchableOpacity 
-                                    onPress={() => setSelectedCourse(null)} 
-                                    className="p-2 bg-gray-50 rounded-full hover:bg-red-50 hover:text-red-500 transition-all active:scale-90"
-                                >
-                                    <Text className="text-gray-500 font-bold text-xs hover:text-red-500">✕ Close</Text>
-                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => setSelectedCourse(null)} className="p-2 bg-gray-50 rounded-full hover:bg-red-50 hover:text-red-500 transition-all active:scale-90"><Text className="text-gray-500 font-bold text-xs hover:text-red-500">✕ Close</Text></TouchableOpacity>
                             </View>
                             <CourseDetailsContent />
                         </>
@@ -485,43 +399,21 @@ const Home = () => {
                 </View>
             </View>
           )}
-
       </View>
 
-      {/* CONFIRMATION MODAL */}
-      <Modal 
-        animationType="fade" 
-        transparent={true} 
-        visible={confirmModalVisible} 
-        onRequestClose={() => setConfirmModalVisible(false)}
-      >
+      <Modal animationType="fade" transparent={true} visible={confirmModalVisible} onRequestClose={() => setConfirmModalVisible(false)}>
         <View className="flex-1 justify-center items-center bg-black/50 backdrop-blur-sm">
             <View className="bg-white p-6 rounded-2xl w-[90%] max-w-sm shadow-2xl scale-100">
                 <Text className="text-xl font-bold text-gray-900 mb-2">Confirm Enrollment</Text>
-                <Text className="text-gray-600 mb-6 leading-6">
-                    Are you sure you want to enroll in <Text className="font-bold text-indigo-600">{selectedCourse?.title}</Text>?
-                </Text>
-                
+                <Text className="text-gray-600 mb-6 leading-6">Are you sure you want to enroll in <Text className="font-bold text-indigo-600">{selectedCourse?.title}</Text>?</Text>
                 <View className="flex-row justify-end gap-3">
-                    <TouchableOpacity 
-                        onPress={() => setConfirmModalVisible(false)} 
-                        className="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200"
-                    >
-                        <Text className="text-gray-700 font-medium">Cancel</Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                        onPress={processEnrollment} 
-                        className="px-4 py-2 bg-indigo-600 rounded-lg hover:bg-indigo-700"
-                    >
-                        <Text className="text-white font-medium">Yes, Enroll</Text>
-                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => setConfirmModalVisible(false)} className="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200"><Text className="text-gray-700 font-medium">Cancel</Text></TouchableOpacity>
+                    <TouchableOpacity onPress={processEnrollment} className="px-4 py-2 bg-indigo-600 rounded-lg hover:bg-indigo-700"><Text className="text-white font-medium">Yes, Enroll</Text></TouchableOpacity>
                 </View>
             </View>
         </View>
       </Modal>
 
-      {/* MOBILE COURSE DETAILS MODAL */}
       <Modal animationType="slide" visible={courseModalVisible} presentationStyle="pageSheet" onRequestClose={() => setCourseModalVisible(false)}>
         {selectedCourse && (
             <View className="flex-1 bg-white">
@@ -535,7 +427,6 @@ const Home = () => {
             </View>
         )}
       </Modal>
-
     </View>
   );
 };
