@@ -46,6 +46,15 @@ const LmsContext = ({ children }: { children: ReactNode }) => {
         if (token && role) {
           api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
           setUser({ accessToken: token, role: role });
+          
+          // --- AUTO LOGIN CHECK ---
+          const decoded: any = jwtDecode(token);
+          // Check if forced password change is needed from token claims
+          if (decoded.isFirstLogin === true) {
+             router.replace('/(auth)/ChangePassword');
+             return;
+          }
+
           const inAuthGroup = segments[0] === '(auth)' || segments.length === 0;
           if (inAuthGroup) redirectBasedOnRole(role);
         }
@@ -69,7 +78,9 @@ const LmsContext = ({ children }: { children: ReactNode }) => {
     setIsLoading(true);
     try {
       const res = await api.post('/api/auth/login', { email, password: pass });
-      const { accessToken } = res.data;
+      
+      // Response structure changed based on backend update: { accessToken, isFirstLogin }
+      const { accessToken, isFirstLogin } = res.data; 
       
       const decoded: any = jwtDecode(accessToken);
       let userRole = 'STUDENT';
@@ -86,7 +97,13 @@ const LmsContext = ({ children }: { children: ReactNode }) => {
       api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
       setUser({ accessToken, email, role: userRole });
       
-      redirectBasedOnRole(userRole);
+      // --- FORCE PASSWORD CHANGE REDIRECT ---
+      if (isFirstLogin === true) {
+         router.replace('/(auth)/ChangePassword');
+      } else {
+         redirectBasedOnRole(userRole);
+      }
+      
       return { success: true };
 
     } catch (error: any) {

@@ -37,16 +37,17 @@ export default function AddAdmin() {
 
     setIsLoading(true);
     try {
-      // Backend expects 'username', so we send fullName as username
+      // --- BUG FIX: Changed 'username' to 'fullName' ---
+      // Backend expects 'fullName' based on the error "Full name cannot be null"
       const payload = {
-        username: fullName.trim(), 
+        fullName: fullName.trim(), 
         email: email,
         password: password
       };
 
       const response = await rootApi.post('/api/auth/admin/create', payload);
 
-      if (response.status === 200) {
+      if (response.status === 200 || response.status === 201) {
         Alert.alert('Success', 'New Admin created successfully!');
         // Reset form
         setFullName('');
@@ -79,7 +80,7 @@ export default function AddAdmin() {
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         
-        {/* Title Section (Optional: Since header has title, this acts as page heading) */}
+        {/* Title Section */}
         <View style={{ marginBottom: 20 }}>
            <Text style={styles.pageTitle}>Create New Admin</Text>
            <Text style={styles.pageSubtitle}>Enter details to grant administrative access</Text>
@@ -100,7 +101,8 @@ export default function AddAdmin() {
               autoCapitalize="words"
               onFocus={() => setFocusedInput('fullName')}
               onBlur={() => setFocusedInput(null)}
-              {...({ style: { outlineStyle: 'none', flex: 1, marginLeft: 10, color: '#334155', fontSize: 15 } } as any)} 
+              // outlineStyle removed for standard RN TextInput, added basic styles
+              {...({ style: [styles.input, { outlineStyle: 'none' }] } as any)} 
             />
           </View>
 
@@ -118,7 +120,7 @@ export default function AddAdmin() {
               autoCapitalize="none"
               onFocus={() => setFocusedInput('email')}
               onBlur={() => setFocusedInput(null)}
-              {...({ style: { outlineStyle: 'none', flex: 1, marginLeft: 10, color: '#334155', fontSize: 15 } } as any)}
+              {...({ style: [styles.input, { outlineStyle: 'none' }] } as any)}
             />
           </View>
 
@@ -135,7 +137,7 @@ export default function AddAdmin() {
               secureTextEntry={!showPassword}
               onFocus={() => setFocusedInput('password')}
               onBlur={() => setFocusedInput(null)}
-              {...({ style: { outlineStyle: 'none', flex: 1, marginLeft: 10, color: '#334155', fontSize: 15 } } as any)}
+              {...({ style: [styles.input, { outlineStyle: 'none' }] } as any)}
             />
             <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: 5 }}>
                 <Ionicons 
