@@ -225,7 +225,7 @@ export default function CourseForm() {
         price: parseFloat(form.price) || 0,
       };
 
-      const response = await rootApi.post("http://192.168.0.249:8088/api/courses", payload);
+      const response = await rootApi.post("http://192.168.0.105:8088/api/courses", payload);
 
       if (response.status === 200 || response.status === 201) {
         setSubmitMessage("Course created successfully!");

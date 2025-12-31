@@ -13,9 +13,9 @@ import {
   View
 } from "react-native";
 import { rootApi } from "../(utils)/axiosInstance";
-// import "../globals.css"; // Ensure this is uncommented in your project
+// import "../globals.css"; 
 
-// --- TYPES & DATA (UNCHANGED) ---
+// --- TYPES & DATA ---
 type Course = {
   courseId: string;
   name: string;
@@ -25,6 +25,16 @@ type Course = {
   videos?: number;
   status: "active" | "inactive";
 };
+
+// --- PLACEHOLDER IMAGES ARRAY ---
+const PLACEHOLDER_IMAGES = [
+  "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800&q=60",
+  "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=800&q=60",
+  "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=800&q=60",
+  "https://images.unsplash.com/photo-1587620962725-abab7fe55159?q=80&w=800&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=800&q=60"
+];
+
 const sampleCourses: Course[] = [
   { courseId: "C001", name: "Intro to React", thumbnailUrl: "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800&q=60", price: 0, isPaid: false, videos: 8, status: "active" },
   { courseId: "C002", name: "Advanced TypeScript", thumbnailUrl: "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=800&q=60", price: 49, isPaid: true, videos: 15, status: "active" },
@@ -42,7 +52,15 @@ export default function Dashboard() {
   const containerPadding = 30;
   const availableWidth = width - (containerPadding * 2);
 
+  const [recentCourses, setRecentCourses] = useState<any[]>([]);
   const [totalCourses, setTotalCourses] = useState<number>(0);
+  
+  // --- NEW STATE: Total Videos Count ---
+  const [totalVideos, setTotalVideos] = useState<number>(0);
+  
+  // --- STATE: Controls initial display limit ---
+  const [showAllCourses, setShowAllCourses] = useState(false);
+
   let cardWidth = 0;
   if (isDesktop) {
     // 4 columns: (Total - 3 gaps) / 4
@@ -51,16 +69,58 @@ export default function Dashboard() {
     // 2 columns: (Total - 1 gap) / 2
     cardWidth = (availableWidth - gap) / 2;
   } else {
-    // Mobile: 2 columns for density, or change to 1 for full width
-    // Let's do 2 columns for mobile to make it look like a dashboard
+    // Mobile: 2 columns
     cardWidth = (availableWidth - gap) / 2;
   }
 
   const stats = useMemo(() => {
-    return { totalCourses: sampleCourses.length, totalVideos: 53, totalStudents: 1248, paid: 2, free: 2 };
+    return { totalCourses: sampleCourses.length, totalStudents: 1248, paid: 2, free: 2 };
   }, []);
 
   const [username, setUserName] = useState("Admin");
+
+  useEffect(() => {
+    rootApi
+      .get("http://192.168.0.105:8088/api/courses")
+      .then((res) => {
+        const rawData = res.data?.data || [];
+        
+        let globalVideoCount = 0; // Initialize counter for all videos across all courses
+
+        // Map API data to UI fields
+        const courses = rawData.map((c: any) => {
+          // Count total lectures in all sections for THIS course
+          const courseLecturesCount = Array.isArray(c.sections)
+            ? c.sections.reduce(
+                (sum: number, s: any) =>
+                  sum + (Array.isArray(s.lectures) ? s.lectures.length : 0),
+                0
+              )
+            : 0;
+
+          // Add to the global count
+          globalVideoCount += courseLecturesCount;
+
+          return {
+            courseId: c.courseId,
+            name: c.title,
+            thumbnailUrl: c.thumbnailUrl,
+            price: c.price,
+            isPaid: !c.isFree,
+            videos: courseLecturesCount,
+            status: c.isPublished ? "active" : "inactive",
+          };
+        });
+
+        setRecentCourses(courses);
+        setTotalVideos(globalVideoCount); // Update the state
+      })
+      .catch((err) => {
+        console.log("Error fetching courses:", err);
+        setRecentCourses([]);
+        setTotalVideos(0);
+      });
+  }, []);
 
   useEffect(() => {
     const fetchUsername = async () => {
@@ -68,7 +128,9 @@ export default function Dashboard() {
         const token = await AsyncStorage.getItem("accessToken");
         if (token) {
           const decode: any = jwtDecode(token);
-          setUserName(decode.sub || "Admin");
+          const fullName = decode.sub || "Admin";
+          // UPDATED: Slice to get only the first 5 characters
+          setUserName(fullName.slice(0, 5));
         }
       } catch (error) {
         console.log("Error fetching user:", error);
@@ -79,14 +141,20 @@ export default function Dashboard() {
 
   const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-useEffect(() => {
-  rootApi
-    .get("http://192.168.0.249:8088/api/courses/count")
-    .then((res) => {
-      setTotalCourses(res.data?.data || 0);
-    })
-    .catch(() => setTotalCourses(0));
-}, []);
+  useEffect(() => {
+    rootApi
+      .get("http://192.168.0.105:8088/api/courses/count")
+      .then((res) => {
+        setTotalCourses(res.data?.data || 0);
+      })
+      .catch(() => setTotalCourses(0));
+  }, []);
+
+  // --- LOGIC: Determine which courses to display ---
+  // If showAllCourses is true, show everything.
+  // If false, slice the first 5.
+  const displayedCourses = showAllCourses ? recentCourses : recentCourses.slice(0, 5);
+
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
       <StatusBar barStyle="dark-content" backgroundColor="#f8fafc" />
@@ -106,25 +174,13 @@ useEffect(() => {
               Here's your academy performance overview.
             </Text>
           </View>
-          
-          {/* Only show profile pic/action on Tablet/Desktop to save space on mobile */}
-          {/*{(isDesktop || isTablet) && (
-             <View className="flex-row items-center space-x-3">
-                <View className="bg-white p-2 rounded-full shadow-sm border border-slate-200">
-                    <Ionicons name="notifications-outline" size={20} color="#64748b" />
-                </View>
-                <View className="h-10 w-10 bg-indigo-100 rounded-full items-center justify-center border border-indigo-200">
-                    <Text className="text-indigo-700 font-bold text-lg">{username.charAt(0).toUpperCase()}</Text>
-                </View>
-             </View>
-          )}*/}
         </View>
 
         {/* STATS GRID */}
         <View className="flex-row flex-wrap" style={{ gap: gap }}>
           <StatCard 
             title="Total Courses" 
-            value={totalCourses} // <-- Use fetched value here
+            value={totalCourses} 
             icon="school-outline" 
             theme="indigo"
             width={cardWidth} 
@@ -136,9 +192,10 @@ useEffect(() => {
             theme="rose"
             width={cardWidth} 
           />
+          {/* UPDATED: Uses dynamic totalVideos state */}
           <StatCard 
             title="Content Library" 
-            value={`${stats.totalVideos} Videos`} 
+            value={`${totalVideos} Videos`} 
             icon="play-circle-outline" 
             theme="orange"
             width={cardWidth} 
@@ -156,35 +213,39 @@ useEffect(() => {
         <View className="mt-8">
           <View className="flex-row items-center justify-between mb-5">
             <Text className="text-xl font-bold text-slate-800">Recent Courses</Text>
-            <TouchableOpacity>
-              <Text className="text-indigo-600 font-semibold text-sm">View All</Text>
+            
+            {/* UPDATED: Button toggles the view */}
+            <TouchableOpacity onPress={() => setShowAllCourses(!showAllCourses)}>
+              <Text className="text-indigo-600 font-semibold text-sm">
+                {showAllCourses ? "Show Less" : "View All"}
+              </Text>
             </TouchableOpacity>
           </View>
 
           <View className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-            {sampleCourses.map((c, index) => (
-              <View 
-                key={c.courseId} 
+            {displayedCourses.map((c, index) => (
+              <View
+                key={c.courseId}
                 className={`p-4 flex-row items-center justify-between ${
-                  index !== sampleCourses.length - 1 ? 'border-b border-slate-50' : ''
+                  index !== displayedCourses.length - 1 ? "border-b border-slate-50" : ""
                 } hover:bg-slate-50 transition-colors`}
               >
                 {/* Left Side: Image & Text */}
                 <View className="flex-row items-center flex-1 mr-4">
                   <View className="relative shadow-sm">
-                    {c.thumbnailUrl ? (
-                      <Image 
-                        source={{ uri: c.thumbnailUrl }} 
-                        className="w-14 h-14 rounded-xl"
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View className="w-14 h-14 rounded-xl bg-slate-100 items-center justify-center border border-slate-200">
-                        <Ionicons name="image-outline" size={24} color="#cbd5e1" />
-                      </View>
-                    )}
+                    {/* Use random placeholder from array if no URL exists */}
+                    <Image
+                      source={{ uri: c.thumbnailUrl || PLACEHOLDER_IMAGES[index % PLACEHOLDER_IMAGES.length] }}
+                      className="w-14 h-14 rounded-xl"
+                      resizeMode="cover"
+                    />
+                    
                     {/* Status Dot */}
-                    <View className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${c.status === 'active' ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                    <View
+                      className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${
+                        c.status === "active" ? "bg-emerald-500" : "bg-slate-400"
+                      }`}
+                    />
                   </View>
 
                   <View className="ml-4 flex-1">
@@ -192,27 +253,39 @@ useEffect(() => {
                       {c.name}
                     </Text>
                     <View className="flex-row items-center mt-1">
-                       <Ionicons name="film-outline" size={12} color="#94a3b8" />
-                       <Text className="text-xs text-slate-500 ml-1 mr-3">{c.videos} Lessons</Text>
-                       {isDesktop && (
-                         <Text className={`text-xs capitalize font-medium ${c.status === 'active' ? 'text-emerald-600' : 'text-slate-400'}`}>
-                           ● {c.status}
-                         </Text>
-                       )}
+                      <Ionicons name="film-outline" size={12} color="#94a3b8" />
+                      <Text className="text-xs text-slate-500 ml-1 mr-3">{c.videos} Lessons</Text>
+                      {isDesktop && (
+                        <Text
+                          className={`text-xs capitalize font-medium ${
+                            c.status === "active" ? "text-emerald-600" : "text-slate-400"
+                          }`}
+                        >
+                          ● {c.status}
+                        </Text>
+                      )}
                     </View>
                   </View>
                 </View>
 
                 {/* Right Side: Price & Tag */}
                 <View className="items-end">
-                   <Text className="font-bold text-slate-800 text-base mb-1">
-                      {c.price === 0 ? "Free" : `$${c.price}`}
-                   </Text>
-                   <View className={`px-2 py-0.5 rounded-md ${c.isPaid ? 'bg-indigo-50' : 'bg-emerald-50'}`}>
-                      <Text className={`text-[10px] font-bold uppercase tracking-wide ${c.isPaid ? 'text-indigo-600' : 'text-emerald-600'}`}>
-                         {c.isPaid ? 'Premium' : 'Free'}
-                      </Text>
-                   </View>
+                  <Text className="font-bold text-slate-800 text-base mb-1">
+                    {c.price === 0 ? "Free" : `$${c.price}`}
+                  </Text>
+                  <View
+                    className={`px-2 py-0.5 rounded-md ${
+                      c.isPaid ? "bg-indigo-50" : "bg-emerald-50"
+                    }`}
+                  >
+                    <Text
+                      className={`text-[10px] font-bold uppercase tracking-wide ${
+                        c.isPaid ? "text-indigo-600" : "text-emerald-600"
+                      }`}
+                    >
+                      {c.isPaid ? "Premium" : "Free"}
+                    </Text>
+                  </View>
                 </View>
               </View>
             ))}
@@ -226,7 +299,6 @@ useEffect(() => {
 
 // --- HELPER COMPONENTS ---
 
-// Helper to map theme names to specific hex colors/classes
 const getThemeColors = (theme: string) => {
     switch (theme) {
         case 'indigo': return { bg: '#e0e7ff', icon: '#4f46e5', trend: 'text-indigo-600', trendBg: 'bg-indigo-50' };
