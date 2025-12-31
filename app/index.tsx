@@ -111,14 +111,8 @@ const MobileLogin = () => {
               {isLoading ? <ActivityIndicator color="white" /> : <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>LOGIN</Text>}
             </LinearGradient>
           </TouchableOpacity>
-
-          <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 20, marginBottom: 30 }}>
-            <Text style={{ color: '#64748b', fontSize: 13 }}>Don't have an account? </Text>
-            <TouchableOpacity onPress={() => router.push('/(auth)/Signup')}>
-              <Text style={{ color: '#e11d48', fontWeight: 'bold', fontSize: 13 }}>Register</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={{ marginTop: 'auto', paddingTop: 10 }}>
+          
+          <View style={{ marginTop: 'auto', paddingTop: 30, paddingBottom: 10 }}>
             <Text style={{ textAlign: 'center', color: '#94a3b8', fontSize: 10 }}>© 2025 Anasol Consultancy Services Pvt Ltd.</Text>
           </View>
         </ScrollView>
@@ -220,13 +214,6 @@ const WebLogin = () => {
             {errorMessage ? (
               <Text className="text-red-500 text-sm text-center mt-2 font-medium">{errorMessage}</Text>
             ) : null}
-
-            <View className="mt-8 flex-row justify-center">
-              <Text className="text-sm text-gray-600">Don't have an account? </Text>
-              <TouchableOpacity onPress={() => router.push('/(auth)/Signup')}>
-                 <Text className="text-indigo-700 font-bold ml-1 underline">Register here</Text>
-              </TouchableOpacity>
-            </View>
           </View>
         </View>
       </View>

@@ -22,23 +22,25 @@ import {
   TouchableWithoutFeedback,
   View
 } from 'react-native';
+// Note: Ensure this path is correct based on your file structure
 import api from '../(utils)/api';
-import { useLms } from '../(utils)/LmsContext'; // Import useLms
+import { useLms } from '../(utils)/LmsContext';
 import "../globals.css";
 
 const logoImg = require('../../assets/images/anasol-logo.png');
 
 // --- DRAWER CONTENT ---
 const CustomDrawerContent = (props: DrawerContentComponentProps) => {
-  const { logout } = useLms(); // Get logout function from Context
+  const { logout } = useLms(); 
 
   const handleLogout = async () => {
-    await logout(); // Calls API and clears correct token
+    await logout(); 
   };
 
   return (
     <View style={{ flex: 1 }}>
       <DrawerContentScrollView {...props} contentContainerStyle={{ paddingTop: 0 }}>
+        {/* Sidebar Header with Gradient */}
         <LinearGradient colors={['#4338ca', '#e11d48']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} className="w-full p-6 pt-16 items-center justify-center mb-6">
           <View className="h-20 w-20 bg-white rounded-full items-center justify-center mb-3 shadow-lg">
              <Image source={logoImg} style={{ width: 45, height: 45, resizeMode: 'contain' }} />
@@ -48,6 +50,8 @@ const CustomDrawerContent = (props: DrawerContentComponentProps) => {
         </LinearGradient>
         <View className="px-2"><DrawerItemList {...props} /></View>
       </DrawerContentScrollView>
+      
+      {/* Logout Button at Bottom */}
       <View className="p-4 border-t border-gray-100 pb-8">
         <DrawerItem 
             label="Sign Out" 
@@ -64,7 +68,7 @@ const CustomDrawerContent = (props: DrawerContentComponentProps) => {
 // --- MAIN LAYOUT ---
 export default function AdminLayout() {
   const router = useRouter();
-  const { logout } = useLms(); // Get logout function from Context
+  const { logout } = useLms(); 
   
   // State for Menus & Modals
   const [menuVisible, setMenuVisible] = useState(false); 
@@ -81,13 +85,11 @@ export default function AdminLayout() {
 
   // 1. Handle Password Change API
   const handleChangePassword = async () => {
-    // --- VALIDATION 1: Empty Fields ---
     if (!passData.old.trim() || !passData.new.trim() || !passData.confirm.trim()) {
         Alert.alert("Validation Error", "All fields are required.");
         return;
     }
 
-    // --- VALIDATION 2: Mismatch ---
     if (passData.new !== passData.confirm) {
         Alert.alert("Validation Error", "New password and Confirm password do not match.");
         return;
@@ -95,27 +97,17 @@ export default function AdminLayout() {
     
     setIsLoading(true);
     try {
-        console.log("Sending API Request with Payload:", {
-           oldPassword: passData.old, 
-           newPassword: passData.new,
-           confirmPassword: passData.confirm 
-        });
-        
-        // --- ACTUAL API CALL (Updated Payload) ---
         const response = await api.post('/api/auth/change-password', { 
-           oldPassword: passData.old, 
-           newPassword: passData.new,
-           confirmPassword: passData.confirm 
+            oldPassword: passData.old, 
+            newPassword: passData.new,
+            confirmPassword: passData.confirm 
         });
         
-        console.log("API Success:", response.data);
         Alert.alert("Success", response.data?.message || "Password Changed Successfully!");
         
-        // Reset & Close
         setModalVisible(false);
         setPassData({ old: '', new: '', confirm: '' });
     } catch (error: any) {
-        console.log("Change Pass Error:", error.response?.data);
         const msg = error.response?.data?.message || "Failed to update password. Please try again.";
         Alert.alert("Update Failed", msg);
     } finally {
@@ -126,7 +118,6 @@ export default function AdminLayout() {
   const openPasswordModal = () => {
     setMenuVisible(false);
     setModalVisible(true);
-    // Reset fields when opening
     setPassData({ old: '', new: '', confirm: '' });
     setShowOld(false); setShowNew(false); setShowConfirm(false);
   };
@@ -137,7 +128,7 @@ export default function AdminLayout() {
       {/* DRAWER NAVIGATOR */}
       <Drawer
         drawerContent={(props) => <CustomDrawerContent {...props} />}
-        screenOptions={{
+        screenOptions={({ navigation }) => ({
           headerBackground: () => (<LinearGradient colors={['#4338ca', '#e11d48']} style={{flex:1}} start={{x:0, y:0}} end={{x:1, y:0}} />),
           headerTintColor: '#fff',
           headerTitleStyle: { fontWeight: 'bold' },
@@ -146,6 +137,13 @@ export default function AdminLayout() {
           drawerInactiveTintColor: '#64748b',
           drawerLabelStyle: { marginLeft: -10, fontWeight: '600', fontSize: 15 },
           
+          // 🔥 NEW CHANGE: Added Menu Button on Left
+          headerLeft: () => (
+            <TouchableOpacity onPress={() => navigation.toggleDrawer()} style={{ marginLeft: 15 }}>
+               <Ionicons name="menu" size={28} color="white" />
+            </TouchableOpacity>
+          ),
+          
           headerRight: () => (
             <TouchableOpacity onPress={() => setMenuVisible(!menuVisible)} style={{ marginRight: 15 }}>
                <View className="w-8 h-8 bg-white/20 rounded-full items-center justify-center border border-white/30">
@@ -153,12 +151,29 @@ export default function AdminLayout() {
                </View>
             </TouchableOpacity>
           ),
-        }}
+        })}
       >
         <Drawer.Screen name="Dashboard" options={{ drawerLabel: 'Dashboard', title: 'Dashboard', drawerIcon: ({ color, size }) => <Ionicons name="grid-outline" size={size} color={color} /> }} />
         <Drawer.Screen name="Courses" options={{ drawerLabel: 'Courses', title: 'Courses', drawerIcon: ({ color, size }) => <Ionicons name="library-outline" size={size} color={color} /> }} />
         <Drawer.Screen name="BulkQuizUpload" options={{ drawerItemStyle: { display: 'none' }, headerShown: false }} />
         <Drawer.Screen name="Students" options={{ drawerLabel: 'Students', title: 'Students', drawerIcon: ({ color, size }) => <Ionicons name="people-outline" size={size} color={color} /> }} />
+        {/* NEW MENU ITEMS */}
+        <Drawer.Screen 
+          name="BulkStudentUpload" 
+          options={{ 
+            drawerLabel: 'Bulk Upload', 
+            title: 'Bulk Student Upload',
+            drawerIcon: ({ color, size }) => <Ionicons name="cloud-upload-outline" size={size} color={color} /> 
+          }} 
+        />
+        <Drawer.Screen 
+          name="AddAdmin" 
+          options={{ 
+            drawerLabel: 'Add Admin', 
+            title: 'Create Admin',
+            drawerIcon: ({ color, size }) => <Ionicons name="person-add-outline" size={size} color={color} /> 
+          }} 
+        />
         <Drawer.Screen name="CourseDetails" options={{ drawerItemStyle: { display: 'none' }, headerShown: false }} />
         <Drawer.Screen name="Courseform" options={{ drawerItemStyle: { display: 'none' }, headerShown: false }} />
       </Drawer>
@@ -178,7 +193,6 @@ export default function AdminLayout() {
                     <Text className="ml-3 text-gray-700 font-medium">Change Password</Text>
                 </TouchableOpacity>
 
-                {/* LOGOUT BUTTON - Updated to use Context */}
                 <TouchableOpacity 
                     onPress={() => { setMenuVisible(false); logout(); }} 
                     className="flex-row items-center px-4 py-3 active:bg-gray-50 border-t border-gray-50"
@@ -198,8 +212,6 @@ export default function AdminLayout() {
              </TouchableWithoutFeedback>
 
              <View className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl">
-                 
-                 {/* Header */}
                  <View className="items-center mb-6">
                      <View className="w-14 h-14 bg-indigo-50 rounded-full items-center justify-center mb-2">
                          <Ionicons name="lock-closed" size={24} color="#4338ca" />
@@ -208,9 +220,7 @@ export default function AdminLayout() {
                      <Text className="text-xs text-gray-400">Secure your admin account</Text>
                  </View>
 
-                 {/* Inputs */}
                  <View className="space-y-4">
-                     
                      {/* OLD PASS */}
                      <View>
                         <Text className="text-[10px] font-bold text-gray-500 uppercase mb-1 ml-1">Old Password</Text>
@@ -266,7 +276,6 @@ export default function AdminLayout() {
                      </View>
                  </View>
 
-                 {/* Buttons */}
                  <View className="flex-row gap-3">
                      <TouchableOpacity onPress={() => setModalVisible(false)} className="flex-1 py-3 bg-gray-100 rounded-xl items-center">
                          <Text className="font-bold text-gray-600">Cancel</Text>

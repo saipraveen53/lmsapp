@@ -1,15 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator, Alert, FlatList, Modal, Platform,
+  ActivityIndicator, Alert, FlatList, Modal,
   StatusBar,
   Text, TouchableOpacity, View
 } from 'react-native';
-import api from '../(utils)/api'; // Ensure this points to your configured axios instance
+import { QuizApi } from '../(utils)/axiosInstance';
 
 export default function BulkQuizUpload() {
   const router = useRouter();
@@ -19,8 +18,10 @@ export default function BulkQuizUpload() {
   const [isLoading, setIsLoading] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
   
+  // SUCCESS STATE for visual feedback
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
   // Toggle: Grand Test vs Lecture Quiz
-  // CHANGED: Default is FALSE (Lecture Quiz) as per request
   const [isGrandTest, setIsGrandTest] = useState(false); 
 
   // Lecture Selection State
@@ -28,21 +29,27 @@ export default function BulkQuizUpload() {
   const [selectedLecture, setSelectedLecture] = useState<any>(null); 
   const [modalVisible, setModalVisible] = useState(false); 
 
-  // --- 1. PARSE COURSE DATA ON MOUNT ---
+  // --- 1. PARSE COURSE DATA & RESET STATE ON MOUNT ---
   useEffect(() => {
+    setSuccessMsg(null);
+    setQuestions([]);
+    setFileName(null);
+    setSelectedLecture(null);
+    setIsGrandTest(false);
+    // ----------------------------------------
+
     if (courseData && typeof courseData === 'string') {
         try {
             const parsedCourse = JSON.parse(courseData);
             const flatLectures: any[] = [];
             
-            // Loop through sections and extract lectures with Section info
             if (parsedCourse.sections && Array.isArray(parsedCourse.sections)) {
                 parsedCourse.sections.forEach((section: any) => {
                     if (section.lectures && Array.isArray(section.lectures)) {
                         section.lectures.forEach((lecture: any) => {
                             flatLectures.push({
                                 ...lecture,
-                                sectionTitle: section.title, // Keep section name for display
+                                sectionTitle: section.title, 
                                 sectionId: section.id
                             });
                         });
@@ -56,7 +63,7 @@ export default function BulkQuizUpload() {
     }
   }, [courseData]);
 
-  // --- 2. CSV PARSING ---
+  // --- 2. CSV PARSING (UNIVERSAL FIX) ---
   const pickDocument = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -65,22 +72,21 @@ export default function BulkQuizUpload() {
       });
 
       if (result.canceled) return;
+      
       const file = result.assets[0];
       setFileName(file.name);
       setIsLoading(true);
+      setSuccessMsg(null); // Clear success msg if user picks a new file
 
-      let content = '';
-      if (Platform.OS === 'web') {
-        const response = await fetch(file.uri);
-        content = await response.text();
-      } else {
-        content = await FileSystem.readAsStringAsync(file.uri);
-      }
+      // --- UNIVERSAL FILE READING ---
+      const response = await fetch(file.uri);
+      const content = await response.text();
+      
       parseCSV(content);
 
-    } catch (err) {
+    } catch (err: any) {
       console.log('File Error:', err);
-      Alert.alert('Error', 'Failed to read file.');
+      Alert.alert('Error', `Failed to read file: ${err.message || 'Unknown error'}`);
       setIsLoading(false);
     }
   };
@@ -92,7 +98,7 @@ export default function BulkQuizUpload() {
       rows.forEach((row) => {
         if (!row.trim()) return; 
         const cols = row.split(','); 
-        // Basic CSV Parsing (Question, A, B, C, D, CorrectAnswer)
+        
         if (cols.length >= 6) {
           const questionText = cols[0].trim();
           const options = [cols[1].trim(), cols[2].trim(), cols[3].trim(), cols[4].trim()];
@@ -101,11 +107,16 @@ export default function BulkQuizUpload() {
           if (ansLetter === 'B') correctOption = options[1];
           else if (ansLetter === 'C') correctOption = options[2];
           else if (ansLetter === 'D') correctOption = options[3];
+          
           parsedQuestions.push({ questionText, options, correctOption });
         }
       });
-      if (parsedQuestions.length === 0) Alert.alert('Error', 'No valid questions found.');
-      else setQuestions(parsedQuestions);
+      
+      if (parsedQuestions.length === 0) {
+          Alert.alert('Error', 'No valid questions found in CSV.');
+      } else {
+          setQuestions(parsedQuestions);
+      }
     } catch (e) {
       Alert.alert('Error', 'Invalid CSV Format.');
     } finally {
@@ -113,14 +124,13 @@ export default function BulkQuizUpload() {
     }
   };
 
-  // --- 3. UPLOAD LOGIC ---
+  // --- 3. SUBMIT / UPLOAD LOGIC ---
   const handleUpload = async () => {
     if (questions.length === 0) {
         Alert.alert("Error", "Please upload a CSV file with questions.");
         return;
     }
     
-    // Validation: If Lecture Quiz (!isGrandTest), must select a lecture
     if (!isGrandTest && !selectedLecture) {
       Alert.alert("Error", "Please select a Lecture/Video for the quiz.");
       return;
@@ -128,24 +138,51 @@ export default function BulkQuizUpload() {
 
     setIsLoading(true);
     try {
-        const payload = {
-            courseId, 
-            isGrandTest,
-            // If it's a lecture quiz, send the lectureId. 
-            lectureId: isGrandTest ? null : selectedLecture.id, 
-            moduleName: isGrandTest ? null : selectedLecture.title,
-            questions
+        const mappedQuestions = questions.map(q => {
+            const correctIndex = q.options.indexOf(q.correctOption);
+            const validIndex = correctIndex !== -1 ? correctIndex : 0;
+
+            return {
+                questionText: q.questionText,
+                questionType: "MCQ", 
+                marks: 1, 
+                options: q.options,
+                correctOptionIndexes: [validIndex] 
+            };
+        });
+
+        const totalMarks = mappedQuestions.reduce((sum, q) => sum + q.marks, 0);
+
+        const quizDTO = {
+            courseId: Number(courseId),
+            quizType: isGrandTest ? "GRAND" : "LECTURE",
+            lectureId: isGrandTest ? null : selectedLecture.id,
+            totalMarks: totalMarks,
+            questions: mappedQuestions
         };
         
-        console.log("Uploading Payload:", payload);
+        const payload = [ quizDTO ];
         
-        await api.post('/api/quiz/bulk-create', payload); 
+        console.log("Uploading Payload:", JSON.stringify(payload, null, 2));
         
-        Alert.alert('Success', 'Quiz Uploaded Successfully!', [
-            { text: 'OK', onPress: () => router.push('/(admin)/Courses') }
-        ]);
+        await QuizApi.post('/api/quizzes/bulk', payload); 
+        
+        // --- SUCCESS HANDLING ---
+        setQuestions([]); 
+        setFileName(null);
+        setSelectedLecture(null);
+        setSuccessMsg("Quiz Uploaded Successfully!");
+
+        // Auto redirect after 2 seconds
+        setTimeout(() => {
+            router.push('/(admin)/Courses');
+        }, 2000);
+
     } catch (error: any) {
       console.log("Upload Error:", error);
+      if (error.response) {
+          console.log("Response Data:", error.response.data);
+      }
       Alert.alert('Failed', error.response?.data?.message || 'Upload failed.');
     } finally {
       setIsLoading(false);
@@ -172,9 +209,19 @@ export default function BulkQuizUpload() {
       {/* BODY */}
       <View className="flex-1 px-5 pt-6">
         
-        {/* Toggle Switch (UPDATED ORDER) */}
+        {/* --- SUCCESS MESSAGE BANNER --- */}
+        {successMsg && (
+            <View className="bg-green-100 border border-green-400 p-4 rounded-xl mb-4 flex-row items-center">
+                <Ionicons name="checkmark-circle" size={24} color="#16a34a" />
+                <View className="ml-3">
+                    <Text className="text-green-800 font-bold text-base">Success!</Text>
+                    <Text className="text-green-700 text-xs">{successMsg}</Text>
+                </View>
+            </View>
+        )}
+
+        {/* Toggle Switch */}
         <View className="flex-row bg-white p-1 rounded-xl border border-slate-200 mb-5">
-          {/* LEFT: Lecture Quiz (Default) */}
           <TouchableOpacity 
             onPress={() => setIsGrandTest(false)} 
             className={`flex-1 py-2.5 rounded-lg items-center ${!isGrandTest ? 'bg-indigo-600' : ''}`}
@@ -182,7 +229,6 @@ export default function BulkQuizUpload() {
              <Text className={`font-bold text-xs ${!isGrandTest ? 'text-white' : 'text-slate-500'}`}>📹 Lecture Quiz</Text>
           </TouchableOpacity>
 
-          {/* RIGHT: Grand Test */}
           <TouchableOpacity 
             onPress={() => setIsGrandTest(true)} 
             className={`flex-1 py-2.5 rounded-lg items-center ${isGrandTest ? 'bg-indigo-600' : ''}`}
@@ -191,7 +237,7 @@ export default function BulkQuizUpload() {
           </TouchableOpacity>
         </View>
 
-        {/* LECTURE SELECTION (Only if NOT Grand Test) */}
+        {/* LECTURE SELECTION */}
         {!isGrandTest && (
           <View className="mb-5">
               <Text className="text-[10px] font-bold text-slate-400 mb-1 ml-1 uppercase">Select Lecture / Video</Text>
@@ -235,7 +281,7 @@ export default function BulkQuizUpload() {
             </View>
         )}
 
-        {/* SUBMIT BUTTON (Only shows when questions are loaded) */}
+        {/* SUBMIT BUTTON */}
         {questions.length > 0 && (
             <TouchableOpacity onPress={handleUpload} disabled={isLoading} className="mb-6">
                 <LinearGradient colors={['#10b981', '#059669']} className="p-4 rounded-xl items-center shadow-md">
