@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import Constants from 'expo-constants';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
@@ -23,8 +24,9 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { rootApi } from "../(utils)/axiosInstance";
+import { CourseApi } from "../(utils)/axiosInstance";
 
+import { StatusBar } from "react-native";
 import "../globals.css";
 
 // --- HELPER: Get Image ---
@@ -276,7 +278,7 @@ const INITIAL_FORM_STATE: LectureForm = {
   isPreview: false,
   orderIndex: "1",
 };
-
+const isWeb = Platform.OS === 'web';
 export default function Courses() {
   const [courses, setCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -339,7 +341,7 @@ export default function Courses() {
 
   const fetchCourses = () => {
     setLoading(true);
-    rootApi.get("http://192.168.0.105:8088/api/courses")
+    CourseApi.get("http://192.168.0.116:8088/api/courses")
       .then(res => {
         setCourses(res.data.data || []);
       })
@@ -427,7 +429,7 @@ export default function Courses() {
       orderIndex: parseInt(form.orderIndex)
     };
 
-    await rootApi.post("http://192.168.0.105:8088/api/videos/link", payload);
+    await CourseApi.post("http://192.168.0.116:8088/api/videos/link", payload);
 
     setLectureMessage("Lecture linked successfully!");
     setLectureMessageType("success");
@@ -453,7 +455,7 @@ const handleDeleteCourse = (courseId: string) => {
     if (!confirmed) return;
     (async () => {
       try {
-        await rootApi.delete(`http://192.168.0.105:8088/api/courses/${courseId}`);
+        await CourseApi.delete(`http://192.168.0.116:8088/api/courses/${courseId}`);
         if (window.alert) window.alert("Course deleted successfully.");
         fetchCourses();
       } catch (error: any) {
@@ -473,7 +475,7 @@ const handleDeleteCourse = (courseId: string) => {
         style: "destructive",
         onPress: async () => {
           try {
-            await rootApi.delete(`http://192.168.0.105:8088/api/courses/${courseId}`);
+            await CourseApi.delete(`http://192.168.0.116:8088/api/courses/${courseId}`);
             Alert.alert("Deleted", "Course deleted successfully.");
             fetchCourses();
           } catch (error: any) {
@@ -484,12 +486,37 @@ const handleDeleteCourse = (courseId: string) => {
     ]
   );
 };
+const GradientStatusBar = () => {
+  // Get the height of the status bar on the current device
+  const statusBarHeight = Constants.statusBarHeight;
+
+  return (
+    <View style={{ height: statusBarHeight }}>
+      {/* 1. Configure the Status Bar to be transparent and sit on top of our layout */}
+      <StatusBar 
+        translucent 
+        backgroundColor="transparent" 
+        barStyle="light-content" 
+      />
+      
+      {/* 2. The Gradient acts as the background */}
+      {/*<LinearGradient
+        colors={['#4f46e5', '#7c3aed']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }} // Left to Right gradient
+        style={{ flex: 1, height: '100%', width: '100%' }}
+      />*/}
+    </View>
+  );
+};
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
-      <View className="flex-1 px-6 pt-6">
+       <GradientStatusBar />
+      <View className="flex-1 px-6 pt-1 ">
         
         {/* --- Header Section with Search Bar --- */}
         <View className="mb-8">
+          
           <View className="flex-row items-center justify-between">
             <View>
               <Text className="text-3xl font-extrabold text-slate-900 tracking-tight">Courses</Text>
@@ -522,7 +549,7 @@ const handleDeleteCourse = (courseId: string) => {
                 color: "#1e293b",
                 borderWidth: 1,
                 borderColor: "#e5e7eb",
-              }}
+                }}
             />
           </View>
         </View>
@@ -566,13 +593,25 @@ const handleDeleteCourse = (courseId: string) => {
                   {/* Thumbnail */}
                   <View className="h-40 md:h-48 relative bg-slate-100">
                     <Image source={getCourseImage(c.thumbnailUrl)} className="w-full h-full" resizeMode="cover" />
-                    <View className="absolute top-3 right-3">
-                       <View className={`px-2.5 py-1 rounded-md backdrop-blur-md ${c.isFree ? 'bg-emerald-500' : 'bg-slate-900'}`}>
+                    <View className="absolute top-3 left-3">
+                       <View className={`p-1.5 rounded-md backdrop-blur-md ${c.isFree ? 'bg-emerald-500' : 'bg-slate-900'}`}>
                           <Text className="text-[10px] font-bold text-white uppercase tracking-wide">
                             {c.isFree ? "FREE" : "PAID"}
                           </Text>
                        </View>
                     </View>
+                    <View className="absolute top-3 right-3">
+                    <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleDeleteCourse(c.courseId);
+                        }}
+                        className="bg-rose-50 p-1.5 rounded-lg items-center justify-center border border-rose-100"
+                        style={{ width: 40 }}
+                      >
+                        <Ionicons name="trash-outline" size={16} color="#e11d48" />
+                      </Pressable>
+                      </View>
                   </View>
 
                   {/* Card Content */}
@@ -601,10 +640,11 @@ const handleDeleteCourse = (courseId: string) => {
                             e.stopPropagation();
                             openLectureModal(c);
                         }} 
-                        className="bg-emerald-50 p-2.5 rounded-lg flex-row items-center justify-center border border-emerald-100"
-                        style={{ width: 40 }}
+                        className="bg-indigo-50/50 py-1.5 rounded-lg flex-row items-center justify-center border border-dashed border-indigo-300"
+                        style={{ width: 150 }}
                       >
-                        <Ionicons name="videocam-outline" size={16} color="#10b981" />
+                        <Ionicons name="videocam-outline" size={16} color="#4f46e5" />
+                        <Text className="text-indigo-600 font-bold text-xs ml-2">Add Lecture</Text>
                       </Pressable>
 
                       <Pressable
@@ -618,7 +658,7 @@ const handleDeleteCourse = (courseId: string) => {
                         <Text className="text-indigo-700 font-bold text-xs ml-1.5">Quiz</Text>
                       </Pressable>
                       
-                      <Pressable
+                      {/*<Pressable
                         onPress={(e) => {
                           e.stopPropagation();
                           handleDeleteCourse(c.courseId);
@@ -627,7 +667,7 @@ const handleDeleteCourse = (courseId: string) => {
                         style={{ width: 40 }}
                       >
                         <Ionicons name="trash-outline" size={16} color="#e11d48" />
-                      </Pressable>
+                      </Pressable>*/}
                     </View>
                   </View>
                 </Pressable>

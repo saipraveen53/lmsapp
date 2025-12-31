@@ -1,11 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
+import axios from "axios"; // Ensure axios is imported (or use your utils)
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   SafeAreaView,
@@ -13,15 +16,19 @@ import {
   Switch,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
   useWindowDimensions
 } from "react-native";
 import { rootApi } from "../(utils)/axiosInstance";
 
+// --- CONSTANTS ---
+const BUNNY_ACCESS_KEY = "eb8560ce-e8a6-414c-8e250605c6d5-627d-4c55"; // From your screenshot
+
 // --- TYPES ---
 interface Lecture {
   title: string;
-  videoUrl: string;
+  videoUrl: string; // We will store the GUID here
   duration: number;
 }
 
@@ -40,8 +47,6 @@ interface CourseData {
   language: string;
   level: string;
   libraryId: string;
-  thumbnailUrl: string;
-  previewVideoUrl: string;
   whatYouWillLearn: string;
   requirements: string;
   targetAudience: string;
@@ -49,6 +54,13 @@ interface CourseData {
   isFree: boolean;
   isPublished: boolean;
   sections: Section[];
+}
+
+interface BunnyVideo {
+  guid: string;
+  title: string;
+  length: number; // Duration in seconds
+  thumbnailFileName: string;
 }
 
 // --- INITIAL STATE ---
@@ -59,9 +71,7 @@ const INITIAL_STATE: CourseData = {
   price: "0",
   language: "English",
   level: "INTERMEDIATE",
-  libraryId: "",
-  thumbnailUrl: "",
-  previewVideoUrl: "",
+  libraryId: "", // Start empty
   whatYouWillLearn: "",
   requirements: "",
   targetAudience: "",
@@ -78,7 +88,7 @@ const INITIAL_STATE: CourseData = {
   ],
 };
 
-// --- FIX: InputField MOVED OUTSIDE THE COMPONENT ---
+// --- INPUT COMPONENT ---
 const InputField = ({
   label,
   value,
@@ -87,33 +97,38 @@ const InputField = ({
   multiline = false,
   error,
   keyboardType = "default",
+  rightElement // Added to support buttons inside/next to input
 }: any) => (
   <View style={{ marginBottom: 16 }}>
     <Text style={{ fontSize: 12, fontWeight: "bold", color: "#64748b", textTransform: "uppercase", marginBottom: 6, marginLeft: 4 }}>
       {label}
     </Text>
-    <TextInput
-      style={[
-        {
-          backgroundColor: "#fff",
-          borderWidth: 1,
-          borderColor: error ? "#ef4444" : "#e5e7eb",
-          borderRadius: 12,
-          paddingHorizontal: 16,
-          paddingVertical: multiline ? 12 : 10,
-          fontSize: 16,
-          color: "#1e293b",
-          minHeight: multiline ? 96 : undefined,
-          textAlignVertical: multiline ? "top" : "auto",
-        },
-      ]}
-      value={value}
-      onChangeText={onChange} // Ensure this prop name matches correctly
-      placeholder={placeholder}
-      placeholderTextColor="#94a3b8"
-      multiline={multiline}
-      keyboardType={keyboardType}
-    />
+    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <TextInput
+        style={[
+            {
+            backgroundColor: "#fff",
+            borderWidth: 1,
+            borderColor: error ? "#ef4444" : "#e5e7eb",
+            borderRadius: 12,
+            paddingHorizontal: 16,
+            paddingVertical: multiline ? 12 : 10,
+            fontSize: 16,
+            color: "#1e293b",
+            minHeight: multiline ? 96 : undefined,
+            textAlignVertical: multiline ? "top" : "auto",
+            flex: 1
+            },
+        ]}
+        value={value}
+        onChangeText={onChange}
+        placeholder={placeholder}
+        placeholderTextColor="#94a3b8"
+        multiline={multiline}
+        keyboardType={keyboardType}
+        />
+        {rightElement && <View style={{ marginLeft: 8 }}>{rightElement}</View>}
+    </View>
     {error && (
       <Text style={{ color: "#ef4444", fontSize: 12, marginTop: 4, marginLeft: 4 }}>{error}</Text>
     )}
@@ -130,6 +145,13 @@ export default function CourseForm() {
   const [form, setForm] = useState<CourseData>(INITIAL_STATE);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof CourseData, string>>>({});
+
+  // --- BUNNY STREAM STATE ---
+  const [bunnyVideos, setBunnyVideos] = useState<BunnyVideo[]>([]);
+  const [loadingVideos, setLoadingVideos] = useState(false);
+  const [showVideoModal, setShowVideoModal] = useState(false);
+  // Track which lecture is currently requesting a video
+  const [currentSelection, setCurrentSelection] = useState<{sIndex: number, lIndex: number} | null>(null);
 
   // --- HANDLERS ---
 
@@ -197,6 +219,58 @@ export default function CourseForm() {
     setForm((prev) => ({ ...prev, sections: updatedSections }));
   };
 
+  // --- BUNNY API LOGIC ---
+  const fetchBunnyVideos = async () => {
+    if (!form.libraryId) {
+        Alert.alert("Required", "Please enter a Library ID first.");
+        return;
+    }
+
+    setLoadingVideos(true);
+    try {
+        const url = `https://video.bunnycdn.com/library/${form.libraryId}/videos?page=1&itemsPerPage=100`;
+        const response = await axios.get(url, {
+            headers: {
+                AccessKey: BUNNY_ACCESS_KEY,
+                Accept: 'application/json',
+            }
+        });
+
+        if (response.status === 200 && response.data.items) {
+            setBunnyVideos(response.data.items);
+            Alert.alert("Success", `Loaded ${response.data.items.length} videos from library.`);
+        }
+    } catch (error: any) {
+        console.error("Bunny API Error:", error);
+        Alert.alert("Error", "Failed to fetch videos. Check Library ID or Network.");
+    } finally {
+        setLoadingVideos(false);
+    }
+  };
+
+  const openVideoSelection = (sIndex: number, lIndex: number) => {
+    if (bunnyVideos.length === 0) {
+        Alert.alert("No Videos", "Please load videos using the Library ID first.");
+        return;
+    }
+    setCurrentSelection({ sIndex, lIndex });
+    setShowVideoModal(true);
+  };
+
+  const selectVideo = (video: BunnyVideo) => {
+    if (currentSelection) {
+        const { sIndex, lIndex } = currentSelection;
+        // Auto-fill title, guid (as videoUrl), and duration
+        updateLecture(sIndex, lIndex, "title", video.title.replace('.mp4', ''));
+        updateLecture(sIndex, lIndex, "videoUrl", video.guid); 
+        updateLecture(sIndex, lIndex, "duration", video.length);
+        
+        setShowVideoModal(false);
+        setCurrentSelection(null);
+    }
+  };
+
+  // --- VALIDATION & SUBMIT ---
   const validate = () => {
     const newErrors: any = {};
     if (!form.title.trim()) newErrors.title = "Title is required";
@@ -225,7 +299,7 @@ export default function CourseForm() {
         price: parseFloat(form.price) || 0,
       };
 
-      const response = await rootApi.post("http://192.168.0.105:8088/api/courses", payload);
+      const response = await rootApi.post("http://192.168.0.116:8088/api/courses", payload);
 
       if (response.status === 200 || response.status === 201) {
         setSubmitMessage("Course created successfully!");
@@ -283,7 +357,6 @@ export default function CourseForm() {
               }}
             >
               <Ionicons name="arrow-back" size={18} color="#fff" />
-              {/*<Text style={{ marginLeft: 8, fontWeight: 'bold', color: '#fff' }}>Back</Text>*/}
             </Pressable>
             <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#fff', flex: 1, textAlign: 'left' }} className=" ml-4">
               Create New Course
@@ -330,92 +403,45 @@ export default function CourseForm() {
             </View>
           </View>
 
-          {/* --- 2. CURRICULUM (SECTIONS) --- */}
-          <View className="mb-6">
-            <View className="flex-row items-center justify-between mb-4">
-               <Text className="text-xl font-bold text-slate-800">Curriculum</Text>
-               <Pressable onPress={addSection} className="flex-row items-center bg-indigo-600 px-4 py-2 rounded-xl shadow-md shadow-indigo-200">
-                  <Ionicons name="add" size={18} color="white" />
-                  <Text className="text-white font-bold ml-1 text-xs">Add Section</Text>
-               </Pressable>
-            </View>
-
-            {form.sections.map((section, sIndex) => (
-              <View key={sIndex} className="bg-white rounded-2xl border border-slate-200 overflow-hidden mb-5 shadow-sm">
-                
-                {/* Section Header */}
-                <View className="bg-slate-50 p-4 border-b border-slate-100 flex-row justify-between items-start">
-                  <View className="flex-1 mr-4">
-                     <TextInput 
-                        placeholder="Section Title (e.g., Introduction)" 
-                        value={section.title} 
-                        onChangeText={(t) => updateSection(sIndex, "title", t)}
-                        className="font-bold text-slate-800 text-base bg-white border border-slate-200 rounded-lg px-3 py-2 mb-2"
-                     />
-                     <TextInput 
-                        placeholder="Short Description" 
-                        value={section.description} 
-                        onChangeText={(t) => updateSection(sIndex, "description", t)}
-                        className="text-xs text-slate-500 bg-white border border-slate-100 rounded-lg px-3 py-1.5"
-                     />
-                  </View>
-                  <Pressable onPress={() => removeSection(sIndex)} className="p-2 bg-rose-50 rounded-lg">
-                     <Ionicons name="trash-outline" size={18} color="#e11d48" />
-                  </Pressable>
-                </View>
-
-                {/* Lectures List */}
-                <View className="p-4 bg-slate-50/30">
-                  {section.lectures.map((lecture, lIndex) => (
-                    <View key={lIndex} className="flex-row items-center mb-3 bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
-                      <View className="w-8 h-8 rounded-full bg-indigo-100 items-center justify-center mr-3">
-                        <Text className="text-indigo-600 font-bold text-xs">{lIndex + 1}</Text>
-                      </View>
-                      <View className="flex-1 mr-2 gap-2">
-                        <TextInput 
-                          placeholder="Lecture Title" 
-                          value={lecture.title} 
-                          onChangeText={(t) => updateLecture(sIndex, lIndex, "title", t)}
-                          className="text-sm font-semibold text-slate-700 border-b border-slate-100 pb-1"
-                        />
-                         <TextInput 
-                          placeholder="Video URL" 
-                          value={lecture.videoUrl} 
-                          onChangeText={(t) => updateLecture(sIndex, lIndex, "videoUrl", t)}
-                          className="text-xs text-slate-400"
-                        />
-                      </View>
-                      <Pressable onPress={() => removeLecture(sIndex, lIndex)} className="p-2">
-                         <Ionicons name="close-circle-outline" size={20} color="#cbd5e1" />
-                      </Pressable>
-                    </View>
-                  ))}
-
-                  <Pressable onPress={() => addLecture(sIndex)} className="flex-row items-center justify-center py-3 border border-dashed border-indigo-300 rounded-xl bg-indigo-50/50 mt-2">
-                     <Ionicons name="videocam-outline" size={16} color="#4f46e5" />
-                     <Text className="text-indigo-600 font-bold text-xs ml-2">Add Lecture</Text>
-                  </Pressable>
-                </View>
-              </View>
-            ))}
-          </View>
-
-          {/* --- 3. DETAILS & SETTINGS --- */}
+          {/* --- 2. SETTINGS & BUNNY CONFIG --- */}
           <View className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 mb-6">
             <View className="flex-row items-center mb-5 border-b border-slate-50 pb-3">
                <View className="bg-orange-50 p-2 rounded-lg mr-3"><Ionicons name="settings-outline" size={20} color="#f97316" /></View>
-               <Text className="text-lg font-bold text-slate-800">Details & Settings</Text>
+               <Text className="text-lg font-bold text-slate-800">Settings & Video Config</Text>
             </View>
+
+            {/* LIBRARY ID WITH FETCH BUTTON */}
+            <InputField 
+                label="Bunny Library ID (Internal)" 
+                value={form.libraryId} 
+                onChange={(t: string) => updateField("libraryId", t)}
+                placeholder="e.g., 572507"
+                rightElement={
+                    <Pressable 
+                        onPress={fetchBunnyVideos} 
+                        disabled={loadingVideos}
+                        className={`px-4 py-3 rounded-xl ${loadingVideos ? 'bg-slate-300' : 'bg-indigo-600'} flex-row items-center`}
+                    >
+                        {loadingVideos ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                            <>
+                                <Ionicons name="cloud-download-outline" size={16} color="white" />
+                                <Text className="text-white font-bold text-xs ml-2">Load Videos</Text>
+                            </>
+                        )}
+                    </Pressable>
+                }
+            />
+            {bunnyVideos.length > 0 && (
+                <Text className="text-xs text-green-600 font-bold ml-1 mb-4">
+                    ✓ {bunnyVideos.length} videos available for selection
+                </Text>
+            )}
 
             <InputField label="What You Will Learn" value={form.whatYouWillLearn} onChange={(t: string) => updateField("whatYouWillLearn", t)} multiline />
             <InputField label="Requirements" value={form.requirements} onChange={(t: string) => updateField("requirements", t)} />
             <InputField label="Target Audience" value={form.targetAudience} onChange={(t: string) => updateField("targetAudience", t)} />
-            
-            <View className="h-[1px] bg-slate-100 my-4" />
-            
-            <InputField label="Thumbnail URL" value={form.thumbnailUrl} onChange={(t: string) => updateField("thumbnailUrl", t)} placeholder="https://..." />
-            <InputField label="Preview Video URL" value={form.previewVideoUrl} onChange={(t: string) => updateField("previewVideoUrl", t)} placeholder="https://..." />
-            <InputField label="Library ID (Internal)" value={form.libraryId} onChange={(t: string) => updateField("libraryId", t)} />
             
             <View className="mt-4 gap-4">
               <View className="flex-row items-center justify-between bg-slate-50 p-3 rounded-xl">
@@ -437,6 +463,86 @@ export default function CourseForm() {
                  />
               </View>
             </View>
+          </View>
+
+          {/* --- 3. CURRICULUM (SECTIONS) --- */}
+          <View className="mb-6">
+            <View className="flex-row items-center justify-between mb-4">
+               <Text className="text-xl font-bold text-slate-800">Curriculum</Text>
+               <Pressable onPress={addSection} className="flex-row items-center bg-indigo-600 px-4 py-2 rounded-xl shadow-md shadow-indigo-200">
+                  <Ionicons name="add" size={18} color="white" />
+                  <Text className="text-white font-bold ml-1 text-xs">Add Section</Text>
+               </Pressable>
+            </View>
+
+            {form.sections.map((section, sIndex) => (
+              <View key={sIndex} className="bg-white rounded-2xl border border-slate-200 overflow-hidden mb-5 shadow-sm">
+                
+                {/* Section Header */}
+                <View className="bg-slate-50 p-4 border-b border-slate-100 flex-row justify-between items-start">
+                  <View className="flex-1 mr-4">
+                      <TextInput 
+                        placeholder="Section Title (e.g., Introduction)" 
+                        value={section.title} 
+                        onChangeText={(t) => updateSection(sIndex, "title", t)}
+                        className="font-bold text-slate-800 text-base bg-white border border-slate-200 rounded-lg px-3 py-2 mb-2"
+                      />
+                      <TextInput 
+                        placeholder="Short Description" 
+                        value={section.description} 
+                        onChangeText={(t) => updateSection(sIndex, "description", t)}
+                        className="text-xs text-slate-500 bg-white border border-slate-100 rounded-lg px-3 py-1.5"
+                      />
+                  </View>
+                  <Pressable onPress={() => removeSection(sIndex)} className="p-2 bg-rose-50 rounded-lg">
+                      <Ionicons name="trash-outline" size={18} color="#e11d48" />
+                  </Pressable>
+                </View>
+
+                {/* Lectures List */}
+                <View className="p-4 bg-slate-50/30">
+                  {section.lectures.map((lecture, lIndex) => (
+                    <View key={lIndex} className="flex-row items-center mb-3 bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                      <View className="w-8 h-8 rounded-full bg-indigo-100 items-center justify-center mr-3">
+                        <Text className="text-indigo-600 font-bold text-xs">{lIndex + 1}</Text>
+                      </View>
+                      <View className="flex-1 mr-2 gap-2">
+                        <TextInput 
+                          placeholder="Lecture Title" 
+                          value={lecture.title} 
+                          onChangeText={(t) => updateLecture(sIndex, lIndex, "title", t)}
+                          className="text-sm font-semibold text-slate-700 border-b border-slate-100 pb-1"
+                        />
+                        {/* Video URL & Select Button Row */}
+                        <View className="flex-row items-center gap-2">
+                             <TextInput 
+                                placeholder="Video GUID / URL" 
+                                value={lecture.videoUrl} 
+                                onChangeText={(t) => updateLecture(sIndex, lIndex, "videoUrl", t)}
+                                className="text-xs text-slate-400 flex-1"
+                            />
+                            <Pressable 
+                                onPress={() => openVideoSelection(sIndex, lIndex)}
+                                className="bg-slate-100 p-2 rounded-lg"
+                            >
+                                <Ionicons name="list" size={16} color="#4f46e5" />
+                            </Pressable>
+                        </View>
+                        {lecture.duration > 0 && <Text className="text-[10px] text-slate-400">Duration: {Math.floor(lecture.duration / 60)}m {lecture.duration % 60}s</Text>}
+                      </View>
+                      <Pressable onPress={() => removeLecture(sIndex, lIndex)} className="p-2">
+                          <Ionicons name="close-circle-outline" size={20} color="#cbd5e1" />
+                      </Pressable>
+                    </View>
+                  ))}
+
+                  <Pressable onPress={() => addLecture(sIndex)} className="flex-row items-center justify-center py-3 border border-dashed border-indigo-300 rounded-xl bg-indigo-50/50 mt-2">
+                      <Ionicons name="videocam-outline" size={16} color="#4f46e5" />
+                      <Text className="text-indigo-600 font-bold text-xs ml-2">Add Lecture</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ))}
           </View>
 
           {/* --- SUBMIT BUTTON --- */}
@@ -478,6 +584,46 @@ export default function CourseForm() {
 
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* --- VIDEO SELECTION MODAL --- */}
+      <Modal
+        visible={showVideoModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowVideoModal(false)}
+      >
+        <View className="flex-1 bg-white">
+            <View className="p-4 border-b border-slate-100 flex-row justify-between items-center bg-slate-50">
+                <Text className="text-lg font-bold text-slate-800">Select Video</Text>
+                <Pressable onPress={() => setShowVideoModal(false)} className="p-2 bg-slate-200 rounded-full">
+                    <Ionicons name="close" size={20} color="#333" />
+                </Pressable>
+            </View>
+            <FlatList
+                data={bunnyVideos}
+                keyExtractor={(item) => item.guid}
+                contentContainerStyle={{ padding: 16 }}
+                renderItem={({ item }) => (
+                    <TouchableOpacity 
+                        onPress={() => selectVideo(item)}
+                        className="flex-row items-center p-3 mb-3 bg-white border border-slate-200 rounded-xl shadow-sm"
+                    >
+                        <View className="w-12 h-12 bg-slate-100 rounded-lg items-center justify-center mr-3">
+                             <Ionicons name="play-circle" size={24} color="#4f46e5" />
+                        </View>
+                        <View className="flex-1">
+                            <Text className="font-semibold text-slate-800 text-sm" numberOfLines={2}>{item.title}</Text>
+                            <Text className="text-xs text-slate-500 mt-1">
+                                Duration: {Math.floor(item.length / 60)}m {item.length % 60}s
+                            </Text>
+                        </View>
+                        <Ionicons name="add-circle-outline" size={24} color="#10b981" />
+                    </TouchableOpacity>
+                )}
+            />
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }

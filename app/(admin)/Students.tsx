@@ -1,326 +1,328 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useMemo, useState } from "react";
-import { Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from "react-native";
+import { useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  Modal, // IMPORT ADDED
+  SafeAreaView,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
+} from "react-native";
+import { CourseApi } from "../(utils)/axiosInstance";
 
-// Mock student data
-const sampleStudents = [
-  {
-    id: "S001",
-    name: "Alice Johnson",
-    email: "alice.johnson@example.com",
-    avatar: "https://randomuser.me/api/portraits/women/44.jpg",
-    enrolled: 5,
-    status: "active",
-    joined: "2023-01-15",
-  },
-  {
-    id: "S002",
-    name: "Bob Smith",
-    email: "bob.smith@example.com",
-    avatar: "https://randomuser.me/api/portraits/men/32.jpg",
-    enrolled: 2,
-    status: "inactive",
-    joined: "2022-11-10",
-  },
-  {
-    id: "S003",
-    name: "Cathy Lee",
-    email: "cathy.lee@example.com",
-    avatar: "https://randomuser.me/api/portraits/women/68.jpg",
-    enrolled: 7,
-    status: "active",
-    joined: "2023-03-22",
-  },
-  {
-    id: "S004",
-    name: "David Kim",
-    email: "david.kim@example.com",
-    avatar: "https://randomuser.me/api/portraits/men/76.jpg",
-    enrolled: 3,
-    status: "active",
-    joined: "2023-05-02",
-  },
-  {
-    id: "S005",
-    name: "Eva Green",
-    email: "eva.green@example.com",
-    avatar: "https://randomuser.me/api/portraits/women/12.jpg",
-    enrolled: 4,
-    status: "inactive",
-    joined: "2022-09-18",
-  },
-];
-
-export default function Students() {
-  const { width } = useWindowDimensions();
-  const isDesktop = width >= 1024;
-  const isTablet = width >= 768 && width < 1024;
-
-  const [search, setSearch] = useState("");
-  const students = useMemo(() => {
-    if (!search) return sampleStudents;
-    return sampleStudents.filter(
-      (s) =>
-        s.name.toLowerCase().includes(search.toLowerCase()) ||
-        s.email.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [search]);
-
-  // Stats
-  const total = sampleStudents.length;
-  const active = sampleStudents.filter((s) => s.status === "active").length;
-  const inactive = total - active;
-
-  // Responsive columns
-  let columns = 1;
-  if (isDesktop) columns = 3;
-  else if (isTablet) columns = 2;
-
-  return (
-    <View style={styles.container}>
-      {/* Header with Gradient */}
-      <View style={styles.header}>
-        {/*<Text style={styles.headerTitle}>Students</Text>*/}
-        {/*<Text style={styles.headerSubtitle}>Manage and view all enrolled students</Text>*/}
-      </View>
-
-      {/* Stats Row */}
-      <View style={styles.statsRow}>
-        <View style={[styles.statCard, { backgroundColor: "#ede9fe" }]}>
-          <Ionicons name="people" size={24} color="#7c3aed" />
-          <Text style={styles.statValue}>{total}</Text>
-          <Text style={styles.statLabel}>Total Students</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: "#fef9c3" }]}>
-          <Ionicons name="checkmark-circle" size={24} color="#f59e42" />
-          <Text style={styles.statValue}>{active}</Text>
-          <Text style={styles.statLabel}>Active</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: "#fee2e2" }]}>
-          <Ionicons name="close-circle" size={24} color="#ef4444" />
-          <Text style={styles.statValue}>{inactive}</Text>
-          <Text style={styles.statLabel}>Inactive</Text>
-        </View>
-      </View>
-
-      {/* Search Bar */}
-      <View style={styles.searchBar}>
-        <Ionicons name="search" size={20} color="#64748b" style={{ marginRight: 8 }} />
-        <TextInput
-          placeholder="Search by name or email"
-          value={search}
-          onChangeText={setSearch}
-          style={styles.searchInput}
-          placeholderTextColor="#94a3b8"
-        />
-      </View>
-
-      {/* Students Grid */}
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={[styles.grid, { gap: 20 }]}>
-          {students.length === 0 && (
-            <Text style={{ color: "#64748b", textAlign: "center", marginTop: 40 }}>No students found.</Text>
-          )}
-          {students.map((s) => (
-            <View
-              key={s.id}
-              style={[
-                styles.card,
-                { width: (width - 48 - (columns) * 20) / columns },
-              ]}
-            >
-              <View style={styles.cardHeader}>
-                <Image source={{ uri: s.avatar }} style={styles.avatar} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.name}>{s.name}</Text>
-                  <Text style={styles.email}>{s.email}</Text>
-                </View>
-                <View
-                  style={[
-                    styles.statusDot,
-                    { backgroundColor: s.status === "active" ? "#22c55e" : "#f87171" },
-                  ]}
-                />
-              </View>
-              <View style={styles.cardBody}>
-                <View style={styles.infoRow}>
-                  <Ionicons name="book" size={16} color="#7c3aed" style={{ marginRight: 4 }} />
-                  <Text style={styles.infoText}>{s.enrolled} Courses</Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Ionicons name="calendar" size={16} color="#db2777" style={{ marginRight: 4 }} />
-                  <Text style={styles.infoText}>Joined {s.joined}</Text>
-                </View>
-              </View>
-              <TouchableOpacity style={styles.actionBtn}>
-                <Ionicons name="eye" size={18} color="#fff" />
-                <Text style={styles.actionText}>View Profile</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-        </View>
-      </ScrollView>
-    </View>
-  );
+// --- TYPES ---
+interface Course {
+  courseId: number;
+  title: string;
+  description: string;
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f8fafc",
-  },
-  header: {
-    paddingBottom: 40,
-    paddingHorizontal: 24,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-    alignItems: "flex-start",
-  },
-  headerTitle: {
-    color: "black",
-    fontSize: 32,
-    fontWeight: "bold",
-    letterSpacing: 1,
-    marginBottom: 6,
-  },
-  headerSubtitle: {
-    color: "black",
-    fontSize: 15,
-    fontWeight: "500",
-    letterSpacing: 0.2,
-  },
-  statsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: -30,
-    marginBottom: 20,
-    marginHorizontal: 15,
-    zIndex: 2,
-  },
-  statCard: {
-    flex: 1,
-    marginHorizontal: 3,
-    borderRadius: 18,
-    alignItems: "center",
-    paddingVertical: 5,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  statValue: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: "#1e293b",
-    marginTop: 4,
-  },
-  statLabel: {
-    fontSize: 13,
-    color: "#64748b",
-    marginTop: 2,
-    fontWeight: "600",
-  },
-  searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    marginHorizontal: 24,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    marginBottom: 10,
-    shadowColor: "#64748b",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: "#334155",
-    paddingVertical: 2,
-  },
-  scrollContent: {
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-    paddingTop: 10,
-  },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "flex-start",
-  },
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 18,
-    marginBottom: 20,
-    padding: 18,
-    shadowColor: "#7c3aed",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.10,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  avatar: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    marginRight: 14,
-    borderWidth: 2,
-    borderColor: "#db2777",
-  },
-  name: {
-    fontSize: 17,
-    fontWeight: "bold",
-    color: "#1e293b",
-  },
-  email: {
-    fontSize: 13,
-    color: "#64748b",
-    marginTop: 2,
-  },
-  statusDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    marginLeft: 10,
-    borderWidth: 2,
-    borderColor: "#fff",
-    marginTop: 2,
-  },
-  cardBody: {
-    marginBottom: 10,
-  },
-  infoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  infoText: {
-    fontSize: 13,
-    color: "#334155",
-  },
-  actionBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#7c3aed",
-    borderRadius: 8,
-    paddingVertical: 7,
-    paddingHorizontal: 16,
-    alignSelf: "flex-end",
-    marginTop: 4,
-  },
-  actionText: {
-    color: "#fff",
-    fontWeight: "600",
-    marginLeft: 6,
-    fontSize: 14,
-  },
-});
+interface Student {
+  studentId: string;
+  fullName: string;
+  email: string;
+  collegeName: string;
+  passoutYear: string;
+  phoneNumber?: string;
+  profileImage?: string;
+}
+
+export default function Students() {
+  const router = useRouter();
+  const { width } = useWindowDimensions();
+  
+  // Responsive Check
+  const isDesktop = width >= 1024;
+  const isTablet = width >= 768 && width < 1024;
+  const numColumns = isDesktop ? 3 : isTablet ? 2 : 1;
+  const gap = 16;
+
+  // State
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  const [students, setStudents] = useState<Student[]>([]);
+  
+  const [loadingCourses, setLoadingCourses] = useState(false);
+  const [loadingStudents, setLoadingStudents] = useState(false);
+  
+  const [showDropdown, setShowDropdown] = useState(false); 
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // --- 1. FETCH COURSES ON MOUNT ---
+  useEffect(() => {
+    fetchCourses();
+  }, []);
+
+  const fetchCourses = async () => {
+    setLoadingCourses(true);
+    try {
+      const response = await CourseApi.get("http://192.168.0.116:8088/api/courses");
+      const data = response.data?.data || [];
+      setCourses(data);
+    } catch (error) {
+      console.error("Failed to fetch courses", error);
+    } finally {
+      setLoadingCourses(false);
+    }
+  };
+
+  // --- 2. FETCH STUDENTS FOR SELECTED COURSE ---
+  const handleSelectCourse = async (course: Course) => {
+    setSelectedCourse(course);
+    setShowDropdown(false); 
+    setLoadingStudents(true);
+    setStudents([]); 
+
+    try {
+      const response = await CourseApi.get(`http://192.168.0.116:8088/api/courses/${course.courseId}/students`);
+      setStudents(response.data?.data || []);
+    } catch (error) {
+      console.error("Failed to fetch students", error);
+    } finally {
+      setLoadingStudents(false);
+    }
+  };
+
+  const filteredStudents = students.filter(s => 
+    s.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.collegeName?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // --- RENDER ITEM: STUDENT CARD ---
+  const renderStudentCard = ({ item }: { item: Student }) => (
+    <View 
+      className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 mb-4"
+      style={isDesktop || isTablet ? { flex: 1, margin: gap / 2, minWidth: (width / numColumns) - 40 } : { marginBottom: 16 }}
+    >
+      <View className="flex-row items-center mb-4">
+        <View className="w-12 h-12 rounded-full bg-indigo-50 items-center justify-center mr-4 border border-indigo-100">
+          <Text className="text-indigo-600 font-bold text-lg">
+            {item.fullName.charAt(0).toUpperCase()}
+          </Text>
+        </View>
+        <View className="flex-1">
+          <Text className="text-base font-bold text-slate-800" numberOfLines={1}>
+            {item.fullName}
+          </Text>
+          <Text className="text-xs text-slate-500" numberOfLines={1}>
+            {item.email}
+          </Text>
+        </View>
+        <View className="bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100">
+           <Text className="text-[10px] font-bold text-emerald-700">
+             {item.passoutYear || "N/A"}
+           </Text>
+        </View>
+      </View>
+
+      <View className="border-t border-slate-50 pt-3">
+        <View className="flex-row items-center mb-2">
+           <Ionicons name="school-outline" size={14} color="#64748b" />
+           <Text className="text-xs text-slate-600 ml-2 flex-1" numberOfLines={1}>
+             {item.collegeName || "Unknown College"}
+           </Text>
+        </View>
+        
+        {item.phoneNumber && (
+          <View className="flex-row items-center">
+             <Ionicons name="call-outline" size={14} color="#64748b" />
+             <Text className="text-xs text-slate-600 ml-2">
+               {item.phoneNumber}
+             </Text>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+
+  return (
+    <SafeAreaView className="flex-1 bg-slate-50">
+      
+      {/* --- HEADER --- */}
+        <View className="flex-row justify-between items-center mb-4 pt-5 px-4">
+            <View>
+                <Text className="text-black text-3xl font-extrabold">Registered Students</Text>
+                <Text className="text-indigo-300 text-sm font-medium opacity-90">Manage enrollments & details</Text>
+            </View>
+        </View>
+
+        {/* --- COURSE SELECTOR BUTTON --- */}
+        <View className="z-50"> 
+            <TouchableOpacity 
+                onPress={() => setShowDropdown(!showDropdown)} 
+                activeOpacity={0.9}
+                className="bg-white rounded-xl flex-row items-center px-4 py-3 shadow-sm border border-slate-300 mx-8 mb-2"
+            >
+                <View className={`w-8 h-8 rounded-full items-center justify-center mr-3 ${selectedCourse ? 'bg-indigo-100' : 'bg-slate-100'}`}>
+                    <Ionicons name={selectedCourse ? "library" : "search"} size={16} color={selectedCourse ? "#4f46e5" : "#94a3b8"} />
+                </View>
+                <View className="flex-1">
+                    <Text className="text-xs text-slate-400 font-bold uppercase tracking-wider">
+                        {selectedCourse ? "Selected Course" : "Filter by Course"}
+                    </Text>
+                    <Text className="text-slate-800 font-bold text-sm" numberOfLines={1}>
+                        {selectedCourse ? selectedCourse.title : "Tap to select a course..."}
+                    </Text>
+                </View>
+                <Ionicons name={showDropdown ? "chevron-up" : "chevron-down"} size={20} color="#94a3b8" />
+            </TouchableOpacity>
+
+            {/* --- LOGIC SPLIT: DESKTOP vs MOBILE --- */}
+
+            {/* 1. DESKTOP VIEW: Use Absolute Dropdown (No Changes) */}
+            {isDesktop && showDropdown && (
+                <View 
+                    className="mx-8 bg-white border border-slate-200 rounded-xl shadow-lg absolute top-full left-0 right-0 z-50"
+                    style={{ maxHeight: 300, elevation: 50 }} 
+                >
+                    {loadingCourses ? (
+                        <View className="p-4">
+                            <ActivityIndicator color="#4f46e5" />
+                        </View>
+                    ) : (
+                        <FlatList 
+                            data={courses}
+                            nestedScrollEnabled={true} 
+                            keyExtractor={(item) => item.courseId.toString()}
+                            contentContainerStyle={{ padding: 8 }}
+                            renderItem={({ item }) => (
+                                <TouchableOpacity 
+                                    onPress={() => handleSelectCourse(item)}
+                                    className={`p-3 mb-1 rounded-lg flex-row items-center ${
+                                        selectedCourse?.courseId === item.courseId ? 'bg-indigo-50' : 'bg-transparent'
+                                    }`}
+                                >
+                                    <View className={`w-8 h-8 rounded-full items-center justify-center mr-3 ${
+                                        selectedCourse?.courseId === item.courseId ? 'bg-indigo-500' : 'bg-slate-100'
+                                    }`}>
+                                        <Text className={`font-bold text-xs ${selectedCourse?.courseId === item.courseId ? 'text-white' : 'text-slate-500'}`}>
+                                            {item.title.charAt(0)}
+                                        </Text>
+                                    </View>
+                                    <View className="flex-1">
+                                        <Text className={`font-bold text-sm ${selectedCourse?.courseId === item.courseId ? 'text-indigo-900' : 'text-slate-700'}`}>
+                                            {item.title}
+                                        </Text>
+                                    </View>
+                                    {selectedCourse?.courseId === item.courseId && (
+                                        <Ionicons name="checkmark-circle" size={18} color="#4f46e5" />
+                                    )}
+                                </TouchableOpacity>
+                            )}
+                        />
+                    )}
+                </View>
+            )}
+
+            {/* 2. MOBILE VIEW: Use Modal (Bottom Sheet Style) */}
+            {!isDesktop && (
+                <Modal
+                    animationType="slide"
+                    transparent={true}
+                    visible={showDropdown}
+                    onRequestClose={() => setShowDropdown(false)}
+                >
+                    <View className="flex-1 justify-end bg-black/50">
+                        <View className="bg-white rounded-t-3xl h-[60%] shadow-2xl">
+                            {/* Modal Header */}
+                            <View className="p-5 border-b border-slate-100 flex-row justify-between items-center">
+                                <Text className="text-lg font-bold text-slate-800">Select Course</Text>
+                                <TouchableOpacity onPress={() => setShowDropdown(false)} className="bg-slate-100 p-2 rounded-full">
+                                    <Ionicons name="close" size={20} color="#64748b" />
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* Modal List */}
+                            {loadingCourses ? (
+                                <View className="flex-1 justify-center items-center">
+                                    <ActivityIndicator size="large" color="#4f46e5" />
+                                </View>
+                            ) : (
+                                <FlatList 
+                                    data={courses}
+                                    keyExtractor={(item) => item.courseId.toString()}
+                                    contentContainerStyle={{ padding: 16 }}
+                                    renderItem={({ item }) => (
+                                        <TouchableOpacity 
+                                            onPress={() => handleSelectCourse(item)}
+                                            className={`p-4 mb-3 rounded-xl border flex-row items-center ${
+                                                selectedCourse?.courseId === item.courseId 
+                                                ? 'bg-indigo-50 border-indigo-200' 
+                                                : 'bg-white border-slate-100'
+                                            }`}
+                                        >
+                                            <View className={`w-10 h-10 rounded-full items-center justify-center mr-3 ${
+                                                selectedCourse?.courseId === item.courseId ? 'bg-indigo-500' : 'bg-slate-100'
+                                            }`}>
+                                                <Text className={`font-bold ${selectedCourse?.courseId === item.courseId ? 'text-white' : 'text-slate-500'}`}>
+                                                    {item.title.charAt(0)}
+                                                </Text>
+                                            </View>
+                                            <View className="flex-1">
+                                                <Text className={`font-bold text-base ${selectedCourse?.courseId === item.courseId ? 'text-indigo-900' : 'text-slate-700'}`}>
+                                                    {item.title}
+                                                </Text>
+                                            </View>
+                                            {selectedCourse?.courseId === item.courseId && (
+                                                <Ionicons name="checkmark-circle" size={24} color="#4f46e5" />
+                                            )}
+                                        </TouchableOpacity>
+                                    )}
+                                />
+                            )}
+                        </View>
+                    </View>
+                </Modal>
+            )}
+
+        </View>
+      
+
+      {/* --- BODY CONTENT --- */}
+      <View className="flex-1 px-4 mt-6"> 
+        {/* Loading / Data States */}
+        {loadingStudents ? (
+             <View className="flex-1 justify-center items-center">
+                 <ActivityIndicator size="large" color="#4f46e5" />
+                 <Text className="text-slate-400 text-xs mt-3 font-medium">Fetching students...</Text>
+             </View>
+        ) : !selectedCourse ? (
+             <View className="flex-1 justify-center items-center pb-20">
+                 <View className="bg-indigo-50 w-24 h-24 rounded-full items-center justify-center mb-4">
+                     <Ionicons name="people" size={40} color="#818cf8" />
+                 </View>
+                 <Text className="text-slate-800 font-bold text-lg">No Course Selected</Text>
+                 <Text className="text-slate-500 text-center px-10 mt-2 leading-5">
+                     Please select a course from the dropdown above.
+                 </Text>
+                 <TouchableOpacity 
+                    onPress={() => setShowDropdown(true)}
+                    className="mt-6 bg-indigo-600 px-6 py-3 rounded-full shadow-lg shadow-indigo-200"
+                 >
+                    <Text className="text-white font-bold">Select Course</Text>
+                 </TouchableOpacity>
+             </View>
+        ) : students.length === 0 ? (
+             <View className="flex-1 justify-center items-center pb-20">
+                 <Ionicons name="file-tray-outline" size={48} color="#cbd5e1" />
+                 <Text className="text-slate-400 font-bold mt-4">No students found.</Text>
+             </View>
+        ) : (
+             <FlatList
+                data={filteredStudents}
+                keyExtractor={(item) => item.studentId || item.email}
+                key={numColumns} 
+                numColumns={numColumns}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 100 }}
+                renderItem={renderStudentCard}
+             />
+        )}
+      </View>
+
+    </SafeAreaView>
+  );
+}
