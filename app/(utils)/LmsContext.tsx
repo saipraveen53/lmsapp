@@ -37,6 +37,7 @@ const LmsContext = ({ children }: { children: ReactNode }) => {
   const router = useRouter();
   const segments = useSegments();
 
+  // --- 1. LOAD USER ON APP START ---
   useEffect(() => {
     const loadUser = async () => {
       try {
@@ -47,14 +48,16 @@ const LmsContext = ({ children }: { children: ReactNode }) => {
           api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
           setUser({ accessToken: token, role: role });
           
-          // --- AUTO LOGIN CHECK ---
+          // Decode token to check if user is forced to change password
           const decoded: any = jwtDecode(token);
-          // Check if forced password change is needed from token claims
+          
+          // [LOGIC] If token says first login, force redirect to ChangePassword
           if (decoded.isFirstLogin === true) {
              router.replace('/(auth)/ChangePassword');
              return;
           }
 
+          // If not first login, check if we are in auth screens and redirect to dashboard/home
           const inAuthGroup = segments[0] === '(auth)' || segments.length === 0;
           if (inAuthGroup) redirectBasedOnRole(role);
         }
@@ -74,12 +77,13 @@ const LmsContext = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // --- 2. LOGIN FUNCTION WITH FIRST-TIME CHECK ---
   const login = async (email: string, pass: string): Promise<AuthResponse> => {
     setIsLoading(true);
     try {
       const res = await api.post('/api/auth/login', { email, password: pass });
       
-      // Response structure changed based on backend update: { accessToken, isFirstLogin }
+      // [IMPORTANT] Backend must return 'isFirstLogin' boolean
       const { accessToken, isFirstLogin } = res.data; 
       
       const decoded: any = jwtDecode(accessToken);
@@ -97,10 +101,12 @@ const LmsContext = ({ children }: { children: ReactNode }) => {
       api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
       setUser({ accessToken, email, role: userRole });
       
-      // --- FORCE PASSWORD CHANGE REDIRECT ---
+      // [LOGIC] Check isFirstLogin flag
       if (isFirstLogin === true) {
+         // Force redirect to Change Password Screen
          router.replace('/(auth)/ChangePassword');
       } else {
+         // Normal redirect
          redirectBasedOnRole(userRole);
       }
       
@@ -148,13 +154,16 @@ const LmsContext = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // LOGOUT
+  // --- 3. LOGOUT FUNCTION ---
   const logout = async () => {
     try { await api.post('/api/auth/logout'); } catch (e) {}
+    
     await AsyncStorage.removeItem('accessToken');
     await AsyncStorage.removeItem('userRole');
     setUser(null);
     delete api.defaults.headers.common['Authorization'];
+    
+    // Redirect to Login Screen
     router.replace('/');
   };
 
