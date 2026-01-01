@@ -59,7 +59,7 @@ export default function Students() {
   const fetchCourses = async () => {
     setLoadingCourses(true);
     try {
-      const response = await CourseApi.get("http://192.168.0.116:8088/api/courses");
+      const response = await CourseApi.get("http://192.168.0.139:8088/api/courses");
       const data = response.data?.data || [];
       setCourses(data);
     } catch (error) {
@@ -77,7 +77,7 @@ export default function Students() {
     setStudents([]); 
 
     try {
-      const response = await CourseApi.get(`http://192.168.0.116:8088/api/courses/${course.courseId}/students`);
+      const response = await CourseApi.get(`http://192.168.0.139:8088/api/courses/${course.courseId}/students`);
       setStudents(response.data?.data || []);
     } catch (error) {
       console.error("Failed to fetch students", error);

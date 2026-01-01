@@ -81,7 +81,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     rootApi
-      .get("http://192.168.0.116:8088/api/courses")
+      .get("http://192.168.0.139:8088/api/courses")
       .then((res) => {
         const rawData = res.data?.data || [];
         
@@ -143,7 +143,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     rootApi
-      .get("http://192.168.0.116:8088/api/courses/count")
+      .get("http://192.168.0.139:8088/api/courses/count")
       .then((res) => {
         setTotalCourses(res.data?.data || 0);
       })
