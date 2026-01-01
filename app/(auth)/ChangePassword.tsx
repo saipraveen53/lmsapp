@@ -6,6 +6,9 @@ import {
   ActivityIndicator,
   Alert,
   BackHandler,
+  Image,
+  Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -15,169 +18,259 @@ import {
 import { useLms } from '../(utils)/LmsContext';
 import api from '../(utils)/api';
 
+const logoImg = require('../../assets/images/anasol-logo.png');
+
 export default function ChangePassword() {
+  if (Platform.OS === 'web') {
+    return <ChangePasswordWeb />;
+  } else {
+    return <ChangePasswordMobile />;
+  }
+}
+
+// ---------------- SHARED LOGIC ----------------
+const useChangePassword = () => {
   const router = useRouter();
-  const { logout } = useLms(); // Logout needed after success
+  const { logout } = useLms();
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
-  // --- BLOCK BACK BUTTON (Android) ---
+  // DISABLE BACK BUTTON (Android)
   useEffect(() => {
+    if (Platform.OS === 'web') return;
     const onBackPress = () => {
       Alert.alert("Action Required", "You must change your password to continue.");
-      return true; // Return true prevents default back action
+      return true;
     };
-
     BackHandler.addEventListener('hardwareBackPress', onBackPress);
-
     return () => BackHandler.removeEventListener('hardwareBackPress', onBackPress);
   }, []);
 
   const handleChangePassword = async () => {
     if (!newPassword || !confirmPassword) {
-      Alert.alert('Error', 'Please fill all fields');
+      const msg = "Please fill all fields";
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
       return;
     }
     if (newPassword !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      const msg = "Passwords do not match";
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
       return;
     }
     if (newPassword.length < 8) {
-      Alert.alert('Error', 'Password must be at least 8 characters long');
+      const msg = "Password must be at least 8 characters long";
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
       return;
     }
 
     setIsLoading(true);
     try {
-      // NOTE: We don't need oldPassword for first-time forced change 
-      // BUT if your backend strictly requires it, we might need a workaround.
-      // Assuming 'authService.changePassword' logic handles 'forcePasswordChange' user differently
-      // OR we just send 'newPassword' if backend supports it.
-      
-      // Based on your backend code:
-      // If it's STUDENT and 'forcePasswordChange' is true, backend might still ask for old password.
-      // FIX: Since this is first login, the "Current Password" is the one they just used to login.
-      // Ideally, backend should have a separate endpoint for 'set-new-password' without old password for forced users.
-      // Kani present backend lo 'change-password' ki old password kavali.
-      
-      // Temporary frontend fix: Let's assume user knows their current temp password 
-      // OR (Better) Backend 'ChangePasswordRequest' update cheyali future lo.
-      
-      // For now, sending dummy or handling logic:
       await api.post('/api/auth/change-password', {
-         oldPassword: "REMOVED_IN_BACKEND_LOGIC_OR_SEND_CURRENT", 
+         oldPassword: "FIRST_TIME_LOGIN_DUMMY_PASS", 
          newPassword: newPassword,
          confirmPassword: confirmPassword
       });
-      // Note: Backend lo 'changePassword' method lo chinna check pedithe better: 
-      // if (user.isForcePasswordChange()) { ignore oldPassword check }
-      // But let's proceed assuming backend handles it or we update backend slightly.
 
-      Alert.alert("Success", "Password Updated! Please Login again.", [
-        { text: "OK", onPress: () => logout() } // Auto Logout
-      ]);
+      const successMsg = "Password Updated Successfully! Please Login again.";
+
+      // --- [FIX] WEB REDIRECT LOGIC ---
+      if (Platform.OS === 'web') {
+          window.alert(successMsg);
+          logout(); // Directly call logout for web
+      } else {
+          Alert.alert("Success", successMsg, [
+            { text: "OK", onPress: () => logout() }
+          ]);
+      }
 
     } catch (error: any) {
       console.log("Change Password Error:", error);
       const msg = error.response?.data?.message || 'Failed to update password';
-      Alert.alert('Error', msg);
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
     } finally {
       setIsLoading(false);
     }
   };
 
+  return {
+    newPassword, setNewPassword,
+    confirmPassword, setConfirmPassword,
+    isLoading,
+    showPassword, setShowPassword,
+    showConfirm, setShowConfirm,
+    handleChangePassword
+  };
+};
+
+// ---------------- MOBILE UI (Matches ForgotPassword) ----------------
+const ChangePasswordMobile = () => {
+  const logic = useChangePassword();
+
   return (
-    <View style={styles.container}>
-      <LinearGradient
-        colors={['#e11d48', '#4338ca']}
-        style={styles.header}
-      >
-        <View style={styles.iconCircle}>
-           <Ionicons name="shield-checkmark-outline" size={40} color="#4338ca" />
-        </View>
-        <Text style={styles.title}>Setup New Password</Text>
-        <Text style={styles.subtitle}>
-          For security, please update your password before proceeding.
-        </Text>
-      </LinearGradient>
+    <View style={{ flex: 1, backgroundColor: '#f8fafc' }}>
+      {/* Header Gradient */}
+      <View style={{ height: '30%', overflow: 'hidden' }}>
+        <LinearGradient
+          colors={['#e11d48', '#4338ca', '#f97316']}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 20 }}
+        >
+           <View style={{ backgroundColor: 'white', borderRadius: 40, padding: 10, elevation: 5 }}>
+              <Image source={logoImg} style={{ width: 50, height: 50, resizeMode: 'contain' }} />
+           </View>
+           <Text style={{ fontSize: 22, fontWeight: '800', color: 'white', marginTop: 10, letterSpacing: 1 }}>
+             SETUP PASSWORD
+           </Text>
+           <Text style={{ color: '#e0e7ff', fontSize: 12 }}>Secure your account to proceed</Text>
+        </LinearGradient>
+      </View>
 
-      <View style={styles.content}>
-        
-        {/* New Password */}
-        <Text style={styles.label}>New Password</Text>
-        <View style={styles.inputContainer}>
-          <Ionicons name="lock-closed-outline" size={20} color="#64748b" />
-          <TextInput
-            style={styles.input}
-            placeholder="Enter new password"
-            placeholderTextColor="#cbd5e1"
-            secureTextEntry={!showPassword}
-            value={newPassword}
-            onChangeText={setNewPassword}
-          />
-        </View>
+      {/* Body Content */}
+      <View style={styles.bodyContainer}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+          
+          <Text style={styles.title}>New Password</Text>
+          <Text style={styles.subtitle}>Create a strong password for your first login.</Text>
 
-        {/* Confirm Password */}
-        <Text style={styles.label}>Confirm Password</Text>
-        <View style={styles.inputContainer}>
-          <Ionicons name="lock-closed-outline" size={20} color="#64748b" />
-          <TextInput
-            style={styles.input}
-            placeholder="Confirm new password"
-            placeholderTextColor="#cbd5e1"
-            secureTextEntry={!showPassword}
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-          />
-           <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-             <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#64748b" />
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>NEW PASSWORD</Text>
+            <View style={[styles.input, styles.passwordContainer]}>
+              <TextInput style={{ flex: 1, color: '#334155' }} placeholder="Enter new password" placeholderTextColor="#cbd5e1"
+                secureTextEntry={!logic.showPassword} value={logic.newPassword} onChangeText={logic.setNewPassword} 
+              />
+              <TouchableOpacity onPress={() => logic.setShowPassword(!logic.showPassword)}>
+                <Ionicons name={logic.showPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#94a3b8" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>CONFIRM PASSWORD</Text>
+            <View style={[styles.input, styles.passwordContainer]}>
+              <TextInput style={{ flex: 1, color: '#334155' }} placeholder="Confirm new password" placeholderTextColor="#cbd5e1"
+                secureTextEntry={!logic.showConfirm} value={logic.confirmPassword} onChangeText={logic.setConfirmPassword} 
+              />
+              <TouchableOpacity onPress={() => logic.setShowConfirm(!logic.showConfirm)}>
+                <Ionicons name={logic.showConfirm ? "eye-off-outline" : "eye-outline"} size={20} color="#94a3b8" />
+              </TouchableOpacity>
+            </View>
+          </View>
+          
+          <Text style={{color: '#94a3b8', fontSize: 11, marginBottom: 25}}>
+            • Minimum 8 characters{"\n"}
+            • Must contain uppercase, lowercase & number
+          </Text>
+
+          <TouchableOpacity onPress={logic.handleChangePassword} disabled={logic.isLoading} activeOpacity={0.8}>
+            <LinearGradient colors={['#e11d48', '#4338ca']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.button}>
+              {logic.isLoading ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>UPDATE PASSWORD</Text>}
+            </LinearGradient>
           </TouchableOpacity>
-        </View>
-        
-        <Text style={{color: '#94a3b8', fontSize: 12, marginBottom: 20, marginTop: 5}}>
-          • Minimum 8 characters{"\n"}
-          • Must contain uppercase, lowercase & number
-        </Text>
 
-        {/* Submit Button */}
-        <TouchableOpacity onPress={handleChangePassword} disabled={isLoading} activeOpacity={0.8}>
-          <LinearGradient
-            colors={['#e11d48', '#4338ca']}
-            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-            style={styles.btn}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <Text style={styles.btnText}>UPDATE PASSWORD</Text>
-            )}
-          </LinearGradient>
-        </TouchableOpacity>
-
+        </ScrollView>
       </View>
     </View>
   );
-}
+};
+
+// ---------------- WEB UI (Matches ForgotPassword Web) ----------------
+const ChangePasswordWeb = () => {
+  const logic = useChangePassword();
+
+  return (
+    <ScrollView 
+      style={{ flex: 1, backgroundColor: '#f3f4f6' }}
+      contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}
+    >
+      <View style={styles.webCard}>
+        <LinearGradient colors={['#e11d48', '#4338ca', '#f97316']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: 8, width: '100%' }} />
+
+        <View style={{ padding: 40, alignItems: 'center' }}>
+          <View style={{ alignItems: 'center', marginBottom: 20 }}>
+             <Image source={logoImg} style={{ width: 60, height: 60, resizeMode: 'contain', marginBottom: 10 }} />
+             <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#1e293b' }}>Setup New Password</Text>
+             <Text style={{ color: '#64748b', textAlign: 'center', marginTop: 5 }}>
+               For security, please update your password before proceeding.
+             </Text>
+          </View>
+
+          <View style={{ width: '100%' }}>
+             <Text style={styles.webLabel}>New Password</Text>
+             <View style={styles.webInputContainer}>
+               <TextInput 
+                 secureTextEntry={!logic.showPassword}
+                 placeholder="Enter new password"
+                 value={logic.newPassword}
+                 onChangeText={logic.setNewPassword}
+                 style={[{ outlineStyle: 'none', flex: 1, fontSize: 14 } as any]}
+               />
+               <TouchableOpacity onPress={() => logic.setShowPassword(!logic.showPassword)}>
+                 <Ionicons name={logic.showPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#94a3b8" />
+               </TouchableOpacity>
+             </View>
+
+             <Text style={styles.webLabel}>Confirm Password</Text>
+             <View style={styles.webInputContainer}>
+               <TextInput 
+                 secureTextEntry={!logic.showConfirm}
+                 placeholder="Confirm new password"
+                 value={logic.confirmPassword}
+                 onChangeText={logic.setConfirmPassword}
+                 style={[{ outlineStyle: 'none', flex: 1, fontSize: 14 } as any]}
+               />
+               <TouchableOpacity onPress={() => logic.setShowConfirm(!logic.showConfirm)}>
+                 <Ionicons name={logic.showConfirm ? "eye-off-outline" : "eye-outline"} size={20} color="#94a3b8" />
+               </TouchableOpacity>
+             </View>
+
+             <TouchableOpacity onPress={logic.handleChangePassword} disabled={logic.isLoading} style={styles.webButton}>
+                {logic.isLoading ? (
+                    <ActivityIndicator color="white" />
+                ) : (
+                    <Text style={{ color: 'white', fontWeight: 'bold' }}>UPDATE PASSWORD</Text>
+                )}
+             </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </ScrollView>
+  );
+};
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
-  header: { padding: 30, paddingTop: 60, alignItems: 'center', borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
-  iconCircle: { backgroundColor: 'white', padding: 15, borderRadius: 50, marginBottom: 15 },
-  title: { fontSize: 22, fontWeight: 'bold', color: 'white', marginBottom: 5 },
-  subtitle: { fontSize: 13, color: '#e0e7ff', textAlign: 'center', marginHorizontal: 20 },
-  
-  content: { padding: 25, paddingTop: 40 },
-  label: { fontSize: 14, fontWeight: '600', color: '#334155', marginBottom: 8 },
-  inputContainer: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: 'white',
-    borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12,
-    paddingHorizontal: 15, height: 50, marginBottom: 15
+  // Mobile Styles
+  bodyContainer: {
+    flex: 1, backgroundColor: 'white', marginTop: -30,
+    borderTopLeftRadius: 30, borderTopRightRadius: 30,
+    paddingHorizontal: 25, paddingTop: 30
   },
-  input: { flex: 1, marginLeft: 10, fontSize: 15, color: '#1e293b' },
-  
-  btn: { borderRadius: 12, paddingVertical: 15, alignItems: 'center', shadowColor: '#4f46e5', shadowOpacity: 0.3, elevation: 5 },
-  btnText: { color: 'white', fontWeight: 'bold', fontSize: 16, letterSpacing: 1 }
+  title: { fontSize: 20, fontWeight: 'bold', color: '#1e293b', marginBottom: 5 },
+  subtitle: { color: '#64748b', marginBottom: 25, fontSize: 13 },
+  inputGroup: { marginBottom: 20 },
+  label: { fontSize: 10, fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', marginBottom: 5, marginLeft: 2 },
+  input: {
+    backgroundColor: '#f1f5f9', borderRadius: 10, paddingHorizontal: 15, paddingVertical: 12,
+    borderWidth: 1, borderColor: '#e2e8f0', color: '#334155', fontSize: 14,
+  },
+  passwordContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 0, height: 50 },
+  button: { borderRadius: 10, paddingVertical: 15, alignItems: 'center', marginTop: 10, elevation: 5 },
+  buttonText: { color: 'white', fontWeight: 'bold', fontSize: 16, letterSpacing: 0.5 },
+
+  // Web Styles
+  webCard: {
+    backgroundColor: 'white', borderRadius: 15, shadowColor: '#000', 
+    shadowOpacity: 0.1, shadowRadius: 10, width: '100%', maxWidth: 450, overflow: 'hidden'
+  },
+  webLabel: { fontSize: 12, fontWeight: 'bold', color: '#475569', marginBottom: 5 },
+  webInputContainer: {
+    width: '100%', padding: 12, borderWidth: 1, borderColor: '#e2e8f0',
+    borderRadius: 8, marginBottom: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'
+  },
+  webButton: {
+    backgroundColor: '#e11d48', padding: 12, borderRadius: 8, alignItems: 'center', width: '100%', marginTop: 10
+  }
 });
