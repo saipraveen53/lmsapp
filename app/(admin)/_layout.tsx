@@ -43,7 +43,7 @@ const CustomDrawerContent = (props: DrawerContentComponentProps) => {
         {/* Sidebar Header with Gradient */}
         <LinearGradient colors={['#4338ca', '#e11d48']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} className="w-full p-6 pt-16 items-center justify-center mb-6">
           <View className="h-20 w-20 bg-white rounded-full items-center justify-center mb-3 shadow-lg">
-             <Image source={logoImg} style={{ width: 45, height: 45, resizeMode: 'contain' }} />
+              <Image source={logoImg} style={{ width: 45, height: 45, resizeMode: 'contain' }} />
           </View>
           <Text className="text-white text-xl font-bold tracking-wider">Anasol LMS</Text>
           <Text className="text-indigo-100 text-[10px] font-bold uppercase tracking-widest opacity-90 mt-1">Admin Console</Text>
@@ -85,15 +85,42 @@ export default function AdminLayout() {
 
   // 1. Handle Password Change API
   const handleChangePassword = async () => {
+    // --- Validation: Empty Check ---
     if (!passData.old.trim() || !passData.new.trim() || !passData.confirm.trim()) {
-        Alert.alert("Validation Error", "All fields are required.");
+        if (Platform.OS === 'web') {
+            window.alert("All fields are required.");
+        } else {
+            Alert.alert("Validation Error", "All fields are required.");
+        }
         return;
     }
 
+    // --- Validation: Match Check ---
     if (passData.new !== passData.confirm) {
-        Alert.alert("Validation Error", "New password and Confirm password do not match.");
+        if (Platform.OS === 'web') {
+            window.alert("New password and Confirm password do not match.");
+        } else {
+            Alert.alert("Validation Error", "New password and Confirm password do not match.");
+        }
         return;
     }
+
+    // --- NEW VALIDATION LOGIC AS PER IMAGE ---
+    // Rules: Min 8 chars, 1 Uppercase, 1 Number, 1 Special Char (@$!%*?&)
+    const hasUpperCase = /[A-Z]/.test(passData.new);
+    const hasNumber = /[0-9]/.test(passData.new);
+    const hasSpecialChar = /[@$!%*?&]/.test(passData.new);
+
+    if (passData.new.length < 8 || !hasUpperCase || !hasNumber || !hasSpecialChar) {
+      const msg = 'Password must contain:\n• At least 8 characters\n• 1 Uppercase letter\n• 1 Number\n• 1 Special Character (@$!%*?&)';
+      if (Platform.OS === 'web') {
+        window.alert(msg);
+      } else {
+        Alert.alert('Invalid Password', msg);
+      }
+      return;
+    }
+    // -----------------------------------------
     
     setIsLoading(true);
     try {
@@ -103,13 +130,22 @@ export default function AdminLayout() {
             confirmPassword: passData.confirm 
         });
         
-        Alert.alert("Success", response.data?.message || "Password Changed Successfully!");
+        const successMsg = response.data?.message || "Password Changed Successfully!";
+        if (Platform.OS === 'web') {
+            window.alert(successMsg);
+        } else {
+            Alert.alert("Success", successMsg);
+        }
         
         setModalVisible(false);
         setPassData({ old: '', new: '', confirm: '' });
     } catch (error: any) {
         const msg = error.response?.data?.message || "Failed to update password. Please try again.";
-        Alert.alert("Update Failed", msg);
+        if (Platform.OS === 'web') {
+            window.alert(msg);
+        } else {
+            Alert.alert("Update Failed", msg);
+        }
     } finally {
         setIsLoading(false);
     }
@@ -247,7 +283,7 @@ export default function AdminLayout() {
                                 secureTextEntry={!showNew}
                                 value={passData.new}
                                 onChangeText={(t) => setPassData({...passData, new: t})}
-                                placeholder="Enter new password"
+                                placeholder="Min 8 chars, 1 Upper, 1 Special"
                                 className="flex-1 text-gray-800 text-sm h-full"
                                 style={{ outlineStyle: 'none' } as any}
                             />
@@ -274,6 +310,12 @@ export default function AdminLayout() {
                             </TouchableOpacity>
                         </View>
                      </View>
+                     
+                     {/* Validation Hint Text */}
+                     <Text className="text-gray-400 text-xs mb-4 -mt-2">
+                        • Min 8 chars, 1 Upper, 1 Number, 1 Special Char
+                     </Text>
+
                  </View>
 
                  <View className="flex-row gap-3">
@@ -282,10 +324,10 @@ export default function AdminLayout() {
                      </TouchableOpacity>
                      
                      <TouchableOpacity 
-                        onPress={handleChangePassword} 
-                        disabled={isLoading} 
-                        activeOpacity={0.8}
-                        className="flex-1"
+                       onPress={handleChangePassword} 
+                       disabled={isLoading} 
+                       activeOpacity={0.8}
+                       className="flex-1"
                      >
                          <LinearGradient colors={['#4338ca', '#e11d48']} className="py-3 rounded-xl items-center">
                             {isLoading ? <ActivityIndicator color="white" size="small" /> : <Text className="font-bold text-white">Update</Text>}
