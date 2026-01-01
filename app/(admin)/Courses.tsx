@@ -339,7 +339,7 @@ export default function Courses() {
 
   const fetchCourses = () => {
     setLoading(true);
-    rootApi.get("http://192.168.0.116:8088/api/courses")
+    rootApi.get("http://192.168.0.139:8088/api/courses")
       .then(res => {
         setCourses(res.data.data || []);
       })
@@ -427,7 +427,7 @@ export default function Courses() {
       orderIndex: parseInt(form.orderIndex)
     };
 
-    await rootApi.post("http://192.168.0.116:8088/api/videos/link", payload);
+    await rootApi.post("http://192.168.0.139:8088/api/videos/link", payload);
 
     setLectureMessage("Lecture linked successfully!");
     setLectureMessageType("success");
@@ -453,7 +453,7 @@ const handleDeleteCourse = (courseId: string) => {
     if (!confirmed) return;
     (async () => {
       try {
-        await rootApi.delete(`http://192.168.0.116:8088/api/courses/${courseId}`);
+        await rootApi.delete(`http://192.168.0.139:8088/api/courses/${courseId}`);
         if (window.alert) window.alert("Course deleted successfully.");
         fetchCourses();
       } catch (error: any) {
@@ -473,7 +473,7 @@ const handleDeleteCourse = (courseId: string) => {
         style: "destructive",
         onPress: async () => {
           try {
-            await rootApi.delete(`http://192.168.0.116:8088/api/courses/${courseId}`);
+            await rootApi.delete(`http://192.168.0.139:8088/api/courses/${courseId}`);
             Alert.alert("Deleted", "Course deleted successfully.");
             fetchCourses();
           } catch (error: any) {
