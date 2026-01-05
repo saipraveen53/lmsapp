@@ -66,6 +66,12 @@ const createAxiosInstance = (baseURL: string): AxiosInstance => {
   return instance;
 };
 
+<<<<<<< HEAD
 export const rootApi: AxiosInstance = createAxiosInstance("http://192.168.0.230:8080");
 export const CourseApi: AxiosInstance = createAxiosInstance("http://192.168.0.230:8088");
 export const QuizApi: AxiosInstance = createAxiosInstance("http://192.168.0.230:8082");
+=======
+export const rootApi: AxiosInstance = createAxiosInstance("http://192.168.0.111:8080");
+export const CourseApi: AxiosInstance = createAxiosInstance("http://192.168.0.230:8088");
+export const QuizApi: AxiosInstance = createAxiosInstance("http://192.168.0.111:8082");
+>>>>>>> Akhil

@@ -154,7 +154,8 @@ const Home = () => {
             config = { headers: { 'Authorization': `Bearer ${token}` } };
         }
 
-        const response = await CourseApi.post(`/api/courses/${selectedCourse.courseId}/enroll`, {}, config);
+        // Updated API call to include videoLibraryId
+        const response = await CourseApi.post(`/api/courses/${selectedCourse.courseId}/enroll/${selectedCourse.videoLibraryId}`, {}, config);
         
         if (response.status === 200 || response.data?.success) {
             Alert.alert("Success", "Enrollment Successful!", [

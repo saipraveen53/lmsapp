@@ -8,63 +8,101 @@ import {
   StatusBar,
   Text, TouchableOpacity, View
 } from 'react-native';
-import { QuizApi } from '../(utils)/axiosInstance';
+import { CourseApi, QuizApi } from '../(utils)/axiosInstance';
 
 export default function BulkQuizUpload() {
   const router = useRouter();
-  const { courseId, courseName, courseData } = useLocalSearchParams(); 
+  const params = useLocalSearchParams();
   
+  // Safe extraction of params
+  const courseId = Array.isArray(params.courseId) ? params.courseId[0] : params.courseId;
+  const courseName = Array.isArray(params.courseName) ? params.courseName[0] : params.courseName;
+
   const [questions, setQuestions] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // For upload process
   const [fileName, setFileName] = useState<string | null>(null);
   
   
-  // SUCCESS STATE for visual feedback
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-
-  // Toggle: Grand Test vs Lecture Quiz
   const [isGrandTest, setIsGrandTest] = useState(false); 
 
   // Lecture Selection State
   const [allLectures, setAllLectures] = useState<any[]>([]); 
   const [selectedLecture, setSelectedLecture] = useState<any>(null); 
   const [modalVisible, setModalVisible] = useState(false); 
+  
+  // Loading state for fetching lectures
+  const [isLoadingLectures, setIsLoadingLectures] = useState(false);
 
-  // --- 1. PARSE COURSE DATA & RESET STATE ON MOUNT ---
+  // --- 1. FETCH COURSE DETAILS (ONLY BACKEND) ---
   useEffect(() => {
     setSuccessMsg(null);
     setQuestions([]);
     setFileName(null);
     setSelectedLecture(null);
     setIsGrandTest(false);
-    // ----------------------------------------
 
-    if (courseData && typeof courseData === 'string') {
+    const fetchDetails = async () => {
+        if (!courseId) return;
+
+        setIsLoadingLectures(true);
         try {
-            const parsedCourse = JSON.parse(courseData);
-            const flatLectures: any[] = [];
+            console.log(`Fetching details for Course ID: ${courseId}`);
             
-            if (parsedCourse.sections && Array.isArray(parsedCourse.sections)) {
-                parsedCourse.sections.forEach((section: any) => {
-                    if (section.lectures && Array.isArray(section.lectures)) {
-                        section.lectures.forEach((lecture: any) => {
-                            flatLectures.push({
-                                ...lecture,
-                                sectionTitle: section.title, 
-                                sectionId: section.id
-                            });
-                        });
-                    }
-                });
-            }
-            setAllLectures(flatLectures);
-        } catch (e) {
-            console.log("Error parsing course data", e);
-        }
-    }
-  }, [courseData]);
+            // Fetch Course Details from Backend
+            const response = await CourseApi.get(`/api/courses/${courseId}`);
+            const courseData = response.data?.data || response.data;
 
-  // --- 2. CSV PARSING (UNIVERSAL FIX) ---
+            // Process Backend Lectures directly
+            if (courseData) {
+                processBackendLectures(courseData);
+            }
+
+        } catch (error: any) {
+            console.log("Error fetching details:", error);
+            Alert.alert("Error", "Failed to load course details.");
+        } finally {
+            setIsLoadingLectures(false); 
+        }
+    };
+
+    fetchDetails();
+  }, [courseId]);
+
+  // --- 2. PROCESS LECTURES FROM BACKEND RESPONSE ---
+  const processBackendLectures = (data: any) => {
+      let flatLectures: any[] = [];
+
+      // Scenario A: Direct Lectures Array
+      if (data.lectures && Array.isArray(data.lectures)) {
+          flatLectures = data.lectures.map((lecture: any) => ({
+              id: lecture.id, // Numeric DB ID
+              title: lecture.title,
+              sectionTitle: "Course Lecture",
+              videoGuid: lecture.videoGuid
+          }));
+      } 
+      // Scenario B: Sections
+      else if (data.sections && Array.isArray(data.sections)) {
+          data.sections.forEach((section: any) => {
+              if (section.lectures && Array.isArray(section.lectures)) {
+                  section.lectures.forEach((lecture: any) => {
+                      flatLectures.push({
+                          id: lecture.id,
+                          title: lecture.title,
+                          sectionTitle: section.title, 
+                          sectionId: section.id
+                      });
+                  });
+              }
+          });
+      }
+
+      console.log(`Loaded ${flatLectures.length} lectures from Backend.`);
+      setAllLectures(flatLectures);
+  };
+
+  // --- 3. CSV PARSING ---
   const pickDocument = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -77,17 +115,15 @@ export default function BulkQuizUpload() {
       const file = result.assets[0];
       setFileName(file.name);
       setIsLoading(true);
-      setSuccessMsg(null); // Clear success msg if user picks a new file
+      setSuccessMsg(null);
 
-      // --- UNIVERSAL FILE READING ---
       const response = await fetch(file.uri);
       const content = await response.text();
       
       parseCSV(content);
 
     } catch (err: any) {
-      console.log('File Error:', err);
-      Alert.alert('Error', `Failed to read file: ${err.message || 'Unknown error'}`);
+      Alert.alert('Error', `Failed to read file: ${err.message}`);
       setIsLoading(false);
     }
   };
@@ -125,15 +161,15 @@ export default function BulkQuizUpload() {
     }
   };
 
-  // --- 3. SUBMIT / UPLOAD LOGIC ---
+  // --- 4. UPLOAD LOGIC ---
   const handleUpload = async () => {
     if (questions.length === 0) {
-        Alert.alert("Error", "Please upload a CSV file with questions.");
+        Alert.alert("Error", "Please upload a CSV file.");
         return;
     }
     
     if (!isGrandTest && !selectedLecture) {
-      Alert.alert("Error", "Please select a Lecture/Video for the quiz.");
+      Alert.alert("Error", "Please select a Lecture/Video first.");
       return;
     }
 
@@ -142,7 +178,6 @@ export default function BulkQuizUpload() {
         const mappedQuestions = questions.map(q => {
             const correctIndex = q.options.indexOf(q.correctOption);
             const validIndex = correctIndex !== -1 ? correctIndex : 0;
-
             return {
                 questionText: q.questionText,
                 questionType: "MCQ", 
@@ -157,33 +192,30 @@ export default function BulkQuizUpload() {
         const quizDTO = {
             courseId: Number(courseId),
             quizType: isGrandTest ? "GRAND" : "LECTURE",
-            lectureId: isGrandTest ? null : selectedLecture.id,
+            lectureId: isGrandTest ? null : selectedLecture.id, 
             totalMarks: totalMarks,
             questions: mappedQuestions
         };
         
-        const payload = [ quizDTO ];
+        console.log("Uploading Quiz Payload:", JSON.stringify(quizDTO, null, 2));
+
+        await QuizApi.post('/api/quizzes/bulk', [ quizDTO ]); 
         
-        console.log("Uploading Payload:", JSON.stringify(payload, null, 2));
-        
-        await QuizApi.post('/api/quizzes/bulk', payload); 
-        
-        // --- SUCCESS HANDLING ---
+        // Reset Form
         setQuestions([]); 
         setFileName(null);
         setSelectedLecture(null);
+        
+        // Show Success Message
         setSuccessMsg("Quiz Uploaded Successfully!");
 
-        // Auto redirect after 2 seconds
+        // 🔥 FIX: Clear message after 4 seconds (Don't navigate back)
         setTimeout(() => {
-            router.push('/(admin)/Courses');
-        }, 2000);
+            setSuccessMsg(null);
+        }, 4000);
 
     } catch (error: any) {
       console.log("Upload Error:", error);
-      if (error.response) {
-          console.log("Response Data:", error.response.data);
-      }
       Alert.alert('Failed', error.response?.data?.message || 'Upload failed.');
     } finally {
       setIsLoading(false);
@@ -197,12 +229,12 @@ export default function BulkQuizUpload() {
       {/* HEADER */}
       <LinearGradient colors={['#4338ca', '#e11d48']} start={{x:0, y:0}} end={{x:1, y:0}} className="pt-12 pb-4 px-4 shadow-sm">
         <View className="flex-row items-center">
-            <TouchableOpacity onPress={() => router.push('/(admin)/Courses')} className="mr-3 bg-white/20 p-2 rounded-full">
+            <TouchableOpacity onPress={() => router.back()} className="mr-3 bg-white/20 p-2 rounded-full">
                 <Ionicons name="arrow-back" size={20} color="white" />
             </TouchableOpacity>
             <View>
                 <Text className="text-lg font-bold text-white">Upload Quiz</Text>
-                <Text className="text-indigo-100 text-xs">{courseName || "Select a course"}</Text>
+                <Text className="text-indigo-100 text-xs">{courseName || "Course ID: " + courseId}</Text>
             </View>
         </View>
       </LinearGradient>
@@ -210,7 +242,7 @@ export default function BulkQuizUpload() {
       {/* BODY */}
       <View className="flex-1 px-5 pt-6">
         
-        {/* --- SUCCESS MESSAGE BANNER --- */}
+        {/* SUCCESS BANNER (Conditionally Rendered) */}
         {successMsg && (
             <View className="bg-green-100 border border-green-400 p-4 rounded-xl mb-4 flex-row items-center">
                 <Ionicons name="checkmark-circle" size={24} color="#16a34a" />
@@ -221,20 +253,20 @@ export default function BulkQuizUpload() {
             </View>
         )}
 
-        {/* Toggle Switch */}
+        {/* QUIZ TYPE TOGGLE */}
         <View className="flex-row bg-white p-1 rounded-xl border border-slate-200 mb-5">
           <TouchableOpacity 
             onPress={() => setIsGrandTest(false)} 
             className={`flex-1 py-2.5 rounded-lg items-center ${!isGrandTest ? 'bg-indigo-600' : ''}`}
           >
-             <Text className={`font-bold text-xs ${!isGrandTest ? 'text-white' : 'text-slate-500'}`}>📹 Lecture Quiz</Text>
+             <Text className={`font-bold text-xs ${!isGrandTest ? 'text-white' : 'text-slate-500'}`}>道 Lecture Quiz</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
             onPress={() => setIsGrandTest(true)} 
             className={`flex-1 py-2.5 rounded-lg items-center ${isGrandTest ? 'bg-indigo-600' : ''}`}
           >
-             <Text className={`font-bold text-xs ${isGrandTest ? 'text-white' : 'text-slate-500'}`}>🏆 Grand Test</Text>
+             <Text className={`font-bold text-xs ${isGrandTest ? 'text-white' : 'text-slate-500'}`}>醇 Grand Test</Text>
           </TouchableOpacity>
         </View>
 
@@ -250,7 +282,7 @@ export default function BulkQuizUpload() {
                   {selectedLecture ? (
                       <View>
                           <Text className="text-slate-800 font-bold text-sm">{selectedLecture.title}</Text>
-                          <Text className="text-slate-400 text-[10px]">{selectedLecture.sectionTitle} • ID: {selectedLecture.id}</Text>
+                          <Text className="text-slate-400 text-[10px]">ID: {selectedLecture.id}</Text>
                       </View>
                   ) : (
                       <Text className="text-slate-400 text-sm">Tap to select a video...</Text>
@@ -260,7 +292,7 @@ export default function BulkQuizUpload() {
           </View>
         )}
 
-        {/* FILE UPLOAD AREA */}
+        {/* UPLOAD BOX */}
         {questions.length === 0 ? (
             <TouchableOpacity onPress={pickDocument} activeOpacity={0.7} className="border-2 border-dashed border-indigo-300 bg-indigo-50/50 rounded-2xl h-40 justify-center items-center mb-4">
                 <View className="bg-indigo-100 p-3 rounded-full mb-2"><Ionicons name="cloud-upload" size={24} color="#4338ca" /></View>
@@ -292,7 +324,7 @@ export default function BulkQuizUpload() {
         )}
       </View>
 
-      {/* --- LECTURE SELECTION MODAL --- */}
+      {/* --- VIDEO SELECTION MODAL --- */}
       <Modal animationType="slide" transparent={true} visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
         <View className="flex-1 bg-black/50 justify-end">
             <View className="bg-white rounded-t-3xl h-[70%] p-5">
@@ -303,14 +335,30 @@ export default function BulkQuizUpload() {
                     </TouchableOpacity>
                 </View>
 
-                {allLectures.length === 0 ? (
+                {/* MODAL CONTENT LOGIC */}
+                {isLoadingLectures ? (
                     <View className="flex-1 justify-center items-center">
-                        <Text className="text-slate-400">No lectures found in this course.</Text>
+                        <ActivityIndicator size="large" color="#4338ca" />
+                        <Text className="text-slate-400 mt-2">Loading lectures...</Text>
+                    </View>
+                ) : allLectures.length === 0 ? (
+                    <View className="flex-1 justify-center items-center">
+                        <Ionicons name="videocam-off" size={40} color="#cbd5e1" />
+                        <Text className="text-slate-500 mt-2 font-bold">No Lectures Found</Text>
+                        <Text className="text-slate-400 text-xs text-center px-8 mt-1">
+                            This course seems to have no lectures added in the backend.
+                        </Text>
+                        <TouchableOpacity 
+                            onPress={() => setModalVisible(false)} 
+                            className="mt-4 bg-indigo-100 px-4 py-2 rounded-lg"
+                        >
+                            <Text className="text-indigo-600 font-bold">Close</Text>
+                        </TouchableOpacity>
                     </View>
                 ) : (
                     <FlatList 
                         data={allLectures}
-                        keyExtractor={(item) => item.id.toString()}
+                        keyExtractor={(item) => String(item.id)}
                         showsVerticalScrollIndicator={false}
                         renderItem={({ item }) => (
                             <TouchableOpacity 
@@ -324,7 +372,7 @@ export default function BulkQuizUpload() {
                                     <View className={`w-8 h-8 rounded-full items-center justify-center mr-3 ${selectedLecture?.id === item.id ? 'bg-indigo-500' : 'bg-slate-100'}`}>
                                         <Ionicons name="play" size={14} color={selectedLecture?.id === item.id ? 'white' : '#94a3b8'} />
                                     </View>
-                                    <View>
+                                    <View className="flex-1">
                                         <Text className={`font-bold text-sm ${selectedLecture?.id === item.id ? 'text-indigo-900' : 'text-slate-700'}`}>{item.title}</Text>
                                         <Text className="text-xs text-slate-400 mt-0.5">{item.sectionTitle} • ID: {item.id}</Text>
                                     </View>

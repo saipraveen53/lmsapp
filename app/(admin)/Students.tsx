@@ -77,7 +77,7 @@ export default function Students() {
     setStudents([]); 
 
     try {
-      const response = await CourseApi.get(`http://192.168.0.116:8088/api/courses/${course.courseId}/students`);
+      const response = await CourseApi.get(`http://192.168.0.139:8088/api/courses/${course.courseId}/students`);
       setStudents(response.data?.data || []);
     } catch (error) {
       console.error("Failed to fetch students", error);
