@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient'; // ADDED IMPORT
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as ScreenOrientation from 'expo-screen-orientation'; // ADDED IMPORT
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -155,6 +156,21 @@ const VideoListByLibrary = () => {
       });
   };
 
+  // --- FULL SCREEN HANDLERS FOR ANDROID ---
+  const handleFullScreenOpen = async () => {
+    if (Platform.OS === 'android') {
+      StatusBar.setHidden(true);
+      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+    }
+  };
+
+  const handleFullScreenClose = async () => {
+    if (Platform.OS === 'android') {
+      StatusBar.setHidden(false);
+      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+    }
+  };
+
   // --- RENDER HELPERS ---
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -194,6 +210,8 @@ const VideoListByLibrary = () => {
               domStorageEnabled={true}
               allowsFullscreenVideo={true}
               style={{ flex: 1, backgroundColor: '#000' }}
+              onFullScreenOpen={handleFullScreenOpen} // Trigger Landscape
+              onFullScreenClose={handleFullScreenClose} // Trigger Portrait
             />
           )}
         </View>
@@ -216,6 +234,11 @@ const VideoListByLibrary = () => {
             onPress={() => {
                 LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
                 setCurrentVideo(null);
+                // Ensure orientation is reset if closed manually
+                if (Platform.OS === 'android') {
+                    StatusBar.setHidden(false);
+                    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+                }
             }}
         >
             <Text style={styles.closeText}>Close Player ✕</Text>
@@ -307,17 +330,17 @@ const VideoListByLibrary = () => {
                   style={styles.card}
                 >
                   <View style={styles.thumbnailContainer}>
-                     <Image 
+                      <Image 
                         source={{ uri: "https://img.freepik.com/free-vector/gradient-ui-ux-background_23-2149052117.jpg" }} 
                         style={styles.thumbnailImage}
                         resizeMode="cover"
-                     />
-                     <View style={styles.playIconOverlay}>
+                      />
+                      <View style={styles.playIconOverlay}>
                         <Ionicons name="play-circle" size={28} color="rgba(255,255,255,0.9)" />
-                     </View>
-                     <View style={styles.durationBadge}>
+                      </View>
+                      <View style={styles.durationBadge}>
                         <Text style={styles.durationText}>{formatDuration(item.length)}</Text>
-                     </View>
+                      </View>
                   </View>
 
                   <View style={styles.cardContent}>
