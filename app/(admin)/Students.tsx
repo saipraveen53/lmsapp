@@ -59,7 +59,7 @@ export default function Students() {
   const fetchCourses = async () => {
     setLoadingCourses(true);
     try {
-      const response = await CourseApi.get("http://192.168.0.116:8088/api/courses");
+      const response = await CourseApi.get("/api/courses");
       const data = response.data?.data || [];
       setCourses(data);
     } catch (error) {

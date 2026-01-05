@@ -29,7 +29,9 @@ import { WebView } from 'react-native-webview';
 import { CourseApi } from "../(utils)/axiosInstance";
 
 
+import axios from "axios";
 import { StatusBar } from "react-native";
+import { FlatList } from "react-native-gesture-handler";
 import "../globals.css";
 
 // --- HELPER: Get Image ---
@@ -68,6 +70,7 @@ const CourseDetailSidebar = ({ course, visible, onClose }: any) => {
     
     // NEW: State for Video Player
     const [currentVideo, setCurrentVideo] = useState<string | null>(null);
+    const [bunnyVideoCount, setBunnyVideoCount] = useState<number | null>(null);
 
     const { height } = useWindowDimensions();
 
@@ -189,6 +192,27 @@ const CourseDetailSidebar = ({ course, visible, onClose }: any) => {
         fetchBunnyVideos();
     }, [course]); 
     // ---------------------------------------------------------
+    useEffect(() => {
+    setBunnyVideoCount(null); // reset on course change
+    const fetchBunnyCount = async () => {
+        if (!course?.libraryId) return;
+        try {
+            const url = `https://video.bunnycdn.com/library/${course.libraryId}/videos?page=1&itemsPerPage=1`;
+            const res = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'AccessKey': 'eb8560ce-e8a6-414c-8e250605c6d5-627d-4c55',
+                    'Accept': 'application/json',
+                },
+            });
+            const data = await res.json();
+            setBunnyVideoCount(data.totalItems ?? 0);
+        } catch {
+            setBunnyVideoCount(0);
+        }
+    };
+    fetchBunnyCount();
+}, [course]);
 
     if (!course) return null;
 
@@ -324,7 +348,7 @@ const CourseDetailSidebar = ({ course, visible, onClose }: any) => {
                         )}
 
                         {/* STACKED CONTENT */}
-                        <View className="px-4 -mt-10">
+                        <View className="px-4 mt-5">
                             
                             {/* Price & Tech Card */}
                             <View className="mb-6">
@@ -334,7 +358,7 @@ const CourseDetailSidebar = ({ course, visible, onClose }: any) => {
                                     <View className="space-y-3">
                                         <View className="flex-row items-center"><Ionicons name="cellular-outline" size={14} color="#64748b"/><Text className="text-slate-600 ml-2 text-xs">Level: {course.level}</Text></View>
                                         <View className="flex-row items-center"><Ionicons name="language-outline" size={14} color="#64748b"/><Text className="text-slate-600 ml-2 text-xs">Language: {course.language}</Text></View>
-                                        <View className="flex-row items-center"><Ionicons name="layers-outline" size={14} color="#64748b"/><Text className="text-slate-600 ml-2 text-xs">{course.totalLectures} Total Lectures</Text></View>
+                                        <View className="flex-row items-center"><Ionicons name="layers-outline" size={14} color="#64748b"/><Text className="text-slate-600 ml-2 text-xs">{bunnyVideoCount === null ? "..." : bunnyVideoCount} Total Lectures</Text></View>
                                     </View>
                                 </View>
 
@@ -423,6 +447,12 @@ export default function Courses() {
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof LectureForm, string>>>({});
 
+  const [bunnyVideos, setBunnyVideos] = useState<any[]>([]);
+  const [loadingVideos, setLoadingVideos] = useState(false);
+  const [videoModalVisible, setVideoModalVisible] = useState(false);
+  const [bunnyVideoCounts, setBunnyVideoCounts] = useState<{ [libraryId: string]: number }>({});
+
+
   const [lectureMessage, setLectureMessage] = useState<string | null>(null);
   const [lectureMessageType, setLectureMessageType] = useState<"success" | "error" | null>(null);
   const { width } = useWindowDimensions();
@@ -503,8 +533,12 @@ export default function Courses() {
   const openLectureModal = (course: any) => {
     setSelectedCourseId(course.courseId);
     setSelectedCourseTitle(course.title);
-    setForm(INITIAL_FORM_STATE); 
+    setForm({
+        ...INITIAL_FORM_STATE,
+        videoLibraryId: course.libraryId || "" // Auto-fill if course has library ID
+    }); 
     setErrors({});
+    setBunnyVideos([]); // Clear previous videos
     setModalVisible(true);
   };
 
@@ -518,11 +552,83 @@ export default function Courses() {
     if (errors[key]) setErrors(prev => ({ ...prev, [key]: undefined }));
   };
 
+  // --- BUNNY API FETCH ---
+  const fetchBunnyVideos = async () => {
+    if (!form.videoLibraryId) {
+        Alert.alert("Required", "Please enter a Library ID first.");
+        return;
+    }
+
+    setLoadingVideos(true);
+    try {
+        const url = `https://video.bunnycdn.com/library/${form.videoLibraryId}/videos?page=1&itemsPerPage=100`;
+        const response = await axios.get(url, {
+            headers: {
+                AccessKey: "eb8560ce-e8a6-414c-8e250605c6d5-627d-4c55",
+                Accept: 'application/json',
+            }
+        });
+
+        if (response.status === 200 && response.data.items) {
+            setBunnyVideos(response.data.items);
+            if (response.data.items.length > 0) {
+                 setVideoModalVisible(true);
+            } else {
+                 Alert.alert("No Videos", "No videos found in this library.");
+            }
+        }
+    } catch (error: any) {
+        console.error("Bunny API Error:", error);
+        Alert.alert("Error", "Failed to fetch videos. Check Library ID or Network.");
+    } finally {
+        setLoadingVideos(false);
+    }
+  };
+
+  const selectBunnyVideo = (video: any) => {
+      // Auto-fill fields from selected video
+      setForm(prev => ({
+          ...prev,
+          title: video.title ? video.title.replace('.mp4', '') : prev.title,
+          videoGuid: video.guid,
+          durationSeconds: video.length ? String(video.length) : "0"
+      }));
+      setVideoModalVisible(false);
+  };
+
+  useEffect(() => {
+    const fetchAllBunnyCounts = async () => {
+      const counts: { [libraryId: string]: number } = {};
+      await Promise.all(
+        courses
+          .filter((c) => c.libraryId)
+          .map(async (c) => {
+            try {
+              const url = `https://video.bunnycdn.com/library/${c.libraryId}/videos?page=1&itemsPerPage=1`;
+              const res = await axios.get(url, {
+                headers: {
+                  AccessKey: "eb8560ce-e8a6-414c-8e250605c6d5-627d-4c55",
+                  Accept: "application/json",
+                },
+              });
+              counts[c.libraryId] = res.data.totalItems || 0;
+            } catch {
+              counts[c.libraryId] = 0;
+            }
+          })
+      );
+      setBunnyVideoCounts(counts);
+    };
+
+    if (courses.length > 0) {
+      fetchAllBunnyCounts();
+    }
+  }, [courses]);
   const validate = () => {
     const newErrors: any = {};
     if (!form.title.trim()) newErrors.title = "Lecture Title is required";
     if (!form.videoGuid.trim()) newErrors.videoGuid = "Video GUID is required";
-    if (!form.videoLibraryId.trim()) newErrors.videoLibraryId = "Library ID is required";
+    //if (!form.videoLibraryId.trim()) newErrors.videoLibraryId = "Library ID is required";
     if (parseInt(form.durationSeconds) <= 0) newErrors.durationSeconds = "Duration must be > 0";
     
     setErrors(newErrors);
@@ -532,49 +638,50 @@ export default function Courses() {
   const filteredCourses = courses.filter((c) =>
     c.title?.toLowerCase().includes(search.toLowerCase())
   );
+
   const handleSubmitLecture = async () => {
-  setLectureMessage(null);
-  setLectureMessageType(null);
+    setLectureMessage(null);
+    setLectureMessageType(null);
 
-  if (!validate()) {
-    setLectureMessage("Please fix the highlighted errors.");
-    setLectureMessageType("error");
-    Alert.alert("Validation Error", "Please fix the highlighted errors.");
-    return;
-  }
+    if (!validate()) {
+        setLectureMessage("Please fix the highlighted errors.");
+        setLectureMessageType("error");
+        Alert.alert("Validation Error", "Please fix the highlighted errors.");
+        return;
+    }
 
-  setSubmitting(true);
-  try {
-    const payload = {
-      courseId: selectedCourseId, 
-      videoLibraryId: parseInt(form.videoLibraryId),
-      videoGuid: form.videoGuid,
-      title: form.title,
-      description: form.description,
-      durationSeconds: parseInt(form.durationSeconds),
-      isPreview: form.isPreview,
-      orderIndex: parseInt(form.orderIndex)
-    };
+    setSubmitting(true);
+    try {
+        const payload = {
+            courseId: selectedCourseId, 
+            videoLibraryId: parseInt(form.videoLibraryId),
+            videoGuid: form.videoGuid,
+            title: form.title,
+            description: form.description,
+            durationSeconds: parseInt(form.durationSeconds),
+            isPreview: form.isPreview,
+            orderIndex: parseInt(form.orderIndex)
+        };
 
-    await CourseApi.post("/api/videos/link", payload);
+        await CourseApi.post("/api/videos/link", payload);
 
-    setLectureMessage("Lecture linked successfully!");
-    setLectureMessageType("success");
-    Alert.alert("Success", "Lecture linked successfully!", [
-      { text: "OK", onPress: closeLectureModal }
-    ]);
-    fetchCourses(); 
+        setLectureMessage("Lecture linked successfully!");
+        setLectureMessageType("success");
+        Alert.alert("Success", "Lecture linked successfully!", [
+            { text: "OK", onPress: closeLectureModal }
+        ]);
+        fetchCourses(); 
 
-  } catch (error: any) {
-    console.error("Lecture Creation Error:", error);
-    const msg = error.response?.data?.message || "Failed to link lecture.";
-    setLectureMessage(msg);
-    setLectureMessageType("error");
-    Alert.alert("Error", msg);
-  } finally {
-    setSubmitting(false);
-  }
-};
+    } catch (error: any) {
+        console.error("Lecture Creation Error:", error);
+        const msg = error.response?.data?.message || "Failed to link lecture.";
+        setLectureMessage(msg);
+        setLectureMessageType("error");
+        Alert.alert("Error", msg);
+    } finally {
+        setSubmitting(false);
+    }
+  };
 
 const handleDeleteCourse = (courseId: string) => {
   if (Platform.OS === "web") {
@@ -752,11 +859,11 @@ const GradientStatusBar = () => {
                       {c.description || "No description provided."}
                     </Text>
 
-                    <View className="flex-row items-center gap-4 mb-4 pb-3 border-b border-slate-50">
-                        <View className="flex-row items-center">
-                           <Ionicons name="book-outline" size={14} color="#94a3b8" />
-                           <Text className="text-xs text-slate-500 ml-1 font-medium">{c.lecturesCount || 0} Lessons</Text>
-                        </View>
+                    <View className="flex-row items-center mb-3">
+                      <Ionicons name="book-outline" size={14} color="#94a3b8" />
+                      <Text className="text-xs text-slate-500 ml-1 font-medium">
+                        {c.libraryId ? (bunnyVideoCounts[c.libraryId] ?? "...") : 0} Lessons
+                      </Text>
                     </View>
 
                     {/* Action Buttons */}
@@ -816,7 +923,7 @@ const GradientStatusBar = () => {
                  <View className="absolute top-0 bottom-0 left-0 right-0" />
              </TouchableWithoutFeedback>
 
-             {/* Modal Container: Adjusted width & radius for Mobile */}
+             {/* Modal Container */}
              <View className={`bg-white rounded-t-3xl p-5 ${isDesktop ? "w-[600px] self-center rounded-3xl mb-10 h-[80%]" : "h-[90%] w-full"}`}>
                  
                  {/* Modal Header */}
@@ -861,11 +968,11 @@ const GradientStatusBar = () => {
                         </View>
                     </View>
 
-                    {/* Technical Config */}
+                    {/* Technical Config & Bunny Fetch */}
                     <View className="mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
                         <Text className="text-xs font-bold text-slate-500 uppercase mb-3">Video Configuration</Text>
                         
-                        <View className="flex-row gap-3 mb-4">
+                        <View className="flex-row gap-3 mb-4 items-end">
                              <View className="flex-1">
                                 <Text className="text-xs font-semibold text-slate-700 mb-1.5 ml-1">Library ID *</Text>
                                 <TextInput 
@@ -876,28 +983,49 @@ const GradientStatusBar = () => {
                                     keyboardType="numeric"
                                 />
                              </View>
+                             
+                             <TouchableOpacity 
+                                onPress={fetchBunnyVideos} 
+                                disabled={loadingVideos}
+                                className={`h-11 px-4 rounded-xl items-center justify-center flex-row ${loadingVideos ? 'bg-indigo-300' : 'bg-indigo-600'}`}
+                             >
+                                {loadingVideos ? (
+                                    <ActivityIndicator size="small" color="#fff" />
+                                ) : (
+                                    <>
+                                        <Ionicons name="cloud-download-outline" size={16} color="white" />
+                                        <Text className="text-white font-bold text-xs ml-2">Load Videos</Text>
+                                    </>
+                                )}
+                             </TouchableOpacity>
+                        </View>
+
+                        <View className="flex-row gap-3 mb-4">
                              <View className="flex-1">
-                                <Text className="text-xs font-semibold text-slate-700 mb-1.5 ml-1">Order Index</Text>
+                                <Text className="text-xs font-semibold text-slate-700 mb-1.5 ml-1">Video GUID *</Text>
                                 <TextInput 
-                                    className="bg-white border border-slate-200 rounded-xl px-3 py-2.5"
-                                    value={form.orderIndex}
-                                    onChangeText={(t) => updateField('orderIndex', t)}
-                                    keyboardType="numeric"
+                                    className={`bg-white border rounded-xl px-4 py-3 ${errors.videoGuid ? 'border-red-500' : 'border-slate-200'}`}
+                                    value={form.videoGuid}
+                                    onChangeText={(t) => updateField('videoGuid', t)}
+                                    placeholder="afa0e720-..."
                                 />
                              </View>
+                             
+                             {bunnyVideos.length > 0 && (
+                                <View className="flex-1">
+                                   <Text className="text-xs font-semibold text-slate-700 mb-1.5 ml-1">Select Video</Text>
+                                   <TouchableOpacity 
+                                     onPress={() => setVideoModalVisible(true)}
+                                     className="bg-emerald-50 border border-emerald-200 h-12 rounded-xl px-3 flex-row items-center justify-between"
+                                   >
+                                        <Text className="text-emerald-700 font-bold text-xs">Browse List ({bunnyVideos.length})</Text>
+                                        <Ionicons name="list" size={16} color="#059669" />
+                                   </TouchableOpacity>
+                                </View>
+                             )}
                         </View>
 
-                        <View className="mb-4">
-                            <Text className="text-xs font-semibold text-slate-700 mb-1.5 ml-1">Video GUID *</Text>
-                            <TextInput 
-                                className={`bg-white border rounded-xl px-4 py-3 ${errors.videoGuid ? 'border-red-500' : 'border-slate-200'}`}
-                                value={form.videoGuid}
-                                onChangeText={(t) => updateField('videoGuid', t)}
-                                placeholder="afa0e720-..."
-                            />
-                        </View>
-
-                        <View className="flex-row items-center justify-between">
+                        <View className="flex-row items-center justify-between mb-4">
                             <View className="w-[48%]">
                                 <Text className="text-xs font-semibold text-slate-700 mb-1.5 ml-1">Duration (Sec)</Text>
                                 <TextInput 
@@ -909,16 +1037,27 @@ const GradientStatusBar = () => {
                                 />
                             </View>
 
-                            <View className="w-[48%] flex-row items-center justify-between bg-white border border-slate-200 rounded-xl px-3 py-2">
-                                <Text className="text-xs font-bold text-slate-600">Is Preview?</Text>
-                                <Switch 
-                                    value={form.isPreview}
-                                    onValueChange={(v) => updateField('isPreview', v)}
-                                    trackColor={{ false: "#cbd5e1", true: "#4f46e5" }}
-                                    thumbColor={"#fff"}
+                            <View className="w-[48%]">
+                                <Text className="text-xs font-semibold text-slate-700 mb-1.5 ml-1">Order Index</Text>
+                                <TextInput 
+                                    className="bg-white border border-slate-200 rounded-xl px-3 py-2.5"
+                                    value={form.orderIndex}
+                                    onChangeText={(t) => updateField('orderIndex', t)}
+                                    keyboardType="numeric"
                                 />
                             </View>
                         </View>
+                        
+                         <View className="flex-row items-center justify-between bg-white border border-slate-200 rounded-xl px-3 py-2">
+                            <Text className="text-xs font-bold text-slate-600">Is Preview?</Text>
+                            <Switch 
+                                value={form.isPreview}
+                                onValueChange={(v) => updateField('isPreview', v)}
+                                trackColor={{ false: "#cbd5e1", true: "#4f46e5" }}
+                                thumbColor={"#fff"}
+                            />
+                        </View>
+
                     </View>
 
                     {/* Submit Button */}
@@ -955,6 +1094,47 @@ const GradientStatusBar = () => {
                  </ScrollView>
              </View>
          </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ====================================================================
+          VIDEO SELECTION MODAL (NESTED)
+         ==================================================================== */}
+      <Modal
+        visible={videoModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setVideoModalVisible(false)}
+      >
+        <View className="flex-1 bg-white">
+            <View className="p-4 border-b border-slate-100 flex-row justify-between items-center bg-slate-50">
+                <Text className="text-lg font-bold text-slate-800">Select Video from Library</Text>
+                <Pressable onPress={() => setVideoModalVisible(false)} className="p-2 bg-slate-200 rounded-full">
+                    <Ionicons name="close" size={20} color="#333" />
+                </Pressable>
+            </View>
+            <FlatList
+                data={bunnyVideos}
+                keyExtractor={(item) => item.guid}
+                contentContainerStyle={{ padding: 16 }}
+                renderItem={({ item }) => (
+                    <TouchableOpacity 
+                        onPress={() => selectBunnyVideo(item)}
+                        className="flex-row items-center p-3 mb-3 bg-white border border-slate-200 rounded-xl shadow-sm"
+                    >
+                        <View className="w-12 h-12 bg-slate-100 rounded-lg items-center justify-center mr-3">
+                             <Ionicons name="play-circle" size={24} color="#4f46e5" />
+                        </View>
+                        <View className="flex-1">
+                            <Text className="font-semibold text-slate-800 text-sm" numberOfLines={2}>{item.title}</Text>
+                            <Text className="text-xs text-slate-500 mt-1">
+                                Duration: {Math.floor(item.length / 60)}m {item.length % 60}s
+                            </Text>
+                        </View>
+                        <Ionicons name="add-circle-outline" size={24} color="#10b981" />
+                    </TouchableOpacity>
+                )}
+            />
+        </View>
       </Modal>
 
     </SafeAreaView>

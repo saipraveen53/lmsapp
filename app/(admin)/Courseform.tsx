@@ -20,7 +20,7 @@ import {
   View,
   useWindowDimensions
 } from "react-native";
-import { rootApi } from "../(utils)/axiosInstance";
+import { CourseApi } from "../(utils)/axiosInstance";
 
 // --- CONSTANTS ---
 const BUNNY_ACCESS_KEY = "eb8560ce-e8a6-414c-8e250605c6d5-627d-4c55"; // From your screenshot
@@ -299,7 +299,7 @@ export default function CourseForm() {
         price: parseFloat(form.price) || 0,
       };
 
-      const response = await rootApi.post("http://192.168.0.116:8088/api/courses", payload);
+      const response = await CourseApi.post("/api/courses", payload);
 
       if (response.status === 200 || response.status === 201) {
         setSubmitMessage("Course created successfully!");
