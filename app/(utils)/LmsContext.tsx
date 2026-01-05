@@ -13,12 +13,13 @@ interface User {
 interface AuthResponse {
   success: boolean;
   message?: string;
+  errorType?: 'CONFLICT' | 'GENERAL'; 
 }
 
 interface LmsContextType {
   user: User | null;
   isLoading: boolean;
-  login: (email: string, pass: string) => Promise<AuthResponse>;
+  login: (email: string, pass: string, forceLogin?: boolean) => Promise<AuthResponse>;
   register: (userData: any) => Promise<AuthResponse>;
   logout: () => void;
 }
@@ -48,16 +49,12 @@ const LmsContext = ({ children }: { children: ReactNode }) => {
           api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
           setUser({ accessToken: token, role: role });
           
-          // Decode token to check if user is forced to change password
           const decoded: any = jwtDecode(token);
-          
-          // If token says first login, force redirect to ChangePassword
           if (decoded.isFirstLogin === true) {
              router.replace('/(auth)/ChangePassword');
              return;
           }
 
-          // If not first login, check if we are in auth screens and redirect to home
           const inAuthGroup = segments[0] === '(auth)' || segments.length === 0;
           if (inAuthGroup) redirectBasedOnRole(role);
         }
@@ -77,11 +74,17 @@ const LmsContext = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // --- 2. LOGIN FUNCTION WITH FIRST-TIME CHECK ---
-  const login = async (email: string, pass: string): Promise<AuthResponse> => {
+  // --- 2. LOGIN FUNCTION WITH FORCE FLAG ---
+  const login = async (email: string, pass: string, forceLogin = false): Promise<AuthResponse> => {
     setIsLoading(true);
     try {
-      const res = await api.post('/api/auth/login', { email, password: pass });
+      // Send force flag to backend
+      const res = await api.post('/api/auth/login', { 
+        email, 
+        password: pass,
+        force: forceLogin 
+      });
+      
       const { accessToken, isFirstLogin } = res.data; 
       
       const decoded: any = jwtDecode(accessToken);
@@ -99,9 +102,7 @@ const LmsContext = ({ children }: { children: ReactNode }) => {
       api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
       setUser({ accessToken, email, role: userRole });
       
-      // Check isFirstLogin flag
       if (isFirstLogin === true) {
-         // Force redirect to Change Password Screen
          router.replace('/(auth)/ChangePassword');
       } else {
          redirectBasedOnRole(userRole);
@@ -111,8 +112,18 @@ const LmsContext = ({ children }: { children: ReactNode }) => {
 
     } catch (error: any) {
       console.error("Login Error:", error);
+      
+      // Check specifically for CONFLICT (409)
+      if (error.response?.status === 409 || error.response?.data?.code === 'ALREADY_LOGGED_IN') {
+          return { 
+            success: false, 
+            errorType: 'CONFLICT', 
+            message: 'User already logged in on another device.' 
+          };
+      }
+
       let msg = error.response?.data?.message || 'Invalid Credentials or Server Error';
-      return { success: false, message: msg };
+      return { success: false, errorType: 'GENERAL', message: msg };
     } finally {
       setIsLoading(false);
     }
@@ -151,16 +162,12 @@ const LmsContext = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // --- 3. LOGOUT FUNCTION ---
   const logout = async () => {
     try { await api.post('/api/auth/logout'); } catch (e) {}
-    
     await AsyncStorage.removeItem('accessToken');
     await AsyncStorage.removeItem('userRole');
     setUser(null);
     delete api.defaults.headers.common['Authorization'];
-    
-    // Redirect to Login Screen
     router.replace('/');
   };
 
