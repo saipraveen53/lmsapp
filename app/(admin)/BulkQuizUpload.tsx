@@ -29,7 +29,10 @@ export default function BulkQuizUpload() {
   // Lecture Selection State
   const [allLectures, setAllLectures] = useState<any[]>([]); 
   const [selectedLecture, setSelectedLecture] = useState<any>(null); 
-  const [modalVisible, setModalVisible] = useState(false); 
+  const [modalVisible, setModalVisible] = useState(false);
+  const [courseData, setCourseData] = useState<any>(null);
+  const [bunnyVideos, setBunnyVideos] = useState<any[]>([]);
+  const [loadingBunny, setLoadingBunny] = useState(false);
   
   // Loading state for fetching lectures
   const [isLoadingLectures, setIsLoadingLectures] = useState(false);
@@ -43,6 +46,7 @@ export default function BulkQuizUpload() {
     setIsGrandTest(false);
 
     const fetchDetails = async () => {
+      
         if (!courseId) return;
 
         setIsLoadingLectures(true);
@@ -55,6 +59,7 @@ export default function BulkQuizUpload() {
 
             // Process Backend Lectures directly
             if (courseData) {
+                setCourseData(courseData); 
                 processBackendLectures(courseData);
             }
 
@@ -69,6 +74,31 @@ export default function BulkQuizUpload() {
     fetchDetails();
   }, [courseId]);
 
+  const fetchBunnyVideos = async () => {
+  if (!courseData) return;
+  try {
+    const libraryId = courseData.libraryId;
+    if (!libraryId) {
+      Alert.alert("No Library ID", "This course does not have a Bunny libraryId.");
+      return;
+    }
+    setLoadingBunny(true);
+    const url = `https://video.bunnycdn.com/library/${libraryId}/videos?page=1&itemsPerPage=100`;
+    const res = await fetch(url, {
+      headers: {
+        AccessKey: "eb8560ce-e8a6-414c-8e250605c6d5-627d-4c55",
+        Accept: "application/json",
+      },
+    });
+    const data = await res.json();
+    setBunnyVideos(data.items || []);
+  } catch (e) {
+    Alert.alert("Error", "Failed to fetch Bunny videos.");
+    setBunnyVideos([]);
+  } finally {
+    setLoadingBunny(false);
+  }
+};
   // --- 2. PROCESS LECTURES FROM BACKEND RESPONSE ---
   const processBackendLectures = (data: any) => {
       let flatLectures: any[] = [];
@@ -276,7 +306,7 @@ export default function BulkQuizUpload() {
               <Text className="text-[10px] font-bold text-slate-400 mb-1 ml-1 uppercase">Select Lecture / Video</Text>
               
               <TouchableOpacity 
-                onPress={() => setModalVisible(true)}
+                 onPress={() => {  setModalVisible(true);  fetchBunnyVideos();}}
                 className="bg-white border border-slate-300 p-4 rounded-xl flex-row justify-between items-center"
               >
                   {selectedLecture ? (
@@ -336,50 +366,48 @@ export default function BulkQuizUpload() {
                 </View>
 
                 {/* MODAL CONTENT LOGIC */}
-                {isLoadingLectures ? (
-                    <View className="flex-1 justify-center items-center">
-                        <ActivityIndicator size="large" color="#4338ca" />
-                        <Text className="text-slate-400 mt-2">Loading lectures...</Text>
-                    </View>
-                ) : allLectures.length === 0 ? (
-                    <View className="flex-1 justify-center items-center">
-                        <Ionicons name="videocam-off" size={40} color="#cbd5e1" />
-                        <Text className="text-slate-500 mt-2 font-bold">No Lectures Found</Text>
-                        <Text className="text-slate-400 text-xs text-center px-8 mt-1">
-                            This course seems to have no lectures added in the backend.
-                        </Text>
-                        <TouchableOpacity 
-                            onPress={() => setModalVisible(false)} 
-                            className="mt-4 bg-indigo-100 px-4 py-2 rounded-lg"
-                        >
-                            <Text className="text-indigo-600 font-bold">Close</Text>
-                        </TouchableOpacity>
-                    </View>
+               {loadingBunny ? (
+                  <View className="flex-1 justify-center items-center">
+                    <ActivityIndicator size="large" color="#4f46e5" />
+                    <Text className="text-slate-400 mt-2">Loading videos...</Text>
+                  </View>
+                ) : bunnyVideos.length === 0 ? (
+                  <View className="flex-1 justify-center items-center">
+                    <Text className="text-slate-400">No videos found in BunnyCDN.</Text>
+                  </View>
                 ) : (
-                    <FlatList 
-                        data={allLectures}
-                        keyExtractor={(item) => String(item.id)}
-                        showsVerticalScrollIndicator={false}
-                        renderItem={({ item }) => (
-                            <TouchableOpacity 
-                                onPress={() => {
-                                    setSelectedLecture(item);
-                                    setModalVisible(false);
-                                }}
-                                className={`p-4 mb-3 rounded-xl border ${selectedLecture?.id === item.id ? 'bg-indigo-50 border-indigo-500' : 'bg-white border-slate-100'}`}
-                            >
-                                <View className="flex-row items-center">
-                                    <View className={`w-8 h-8 rounded-full items-center justify-center mr-3 ${selectedLecture?.id === item.id ? 'bg-indigo-500' : 'bg-slate-100'}`}>
-                                        <Ionicons name="play" size={14} color={selectedLecture?.id === item.id ? 'white' : '#94a3b8'} />
-                                    </View>
-                                    <View className="flex-1">
-                                        <Text className={`font-bold text-sm ${selectedLecture?.id === item.id ? 'text-indigo-900' : 'text-slate-700'}`}>{item.title}</Text>
-                                        <Text className="text-xs text-slate-400 mt-0.5">{item.sectionTitle} • ID: {item.id}</Text>
-                                    </View>
-                                </View>
-                            </TouchableOpacity>
-                        )}
-                    />
+                  <FlatList 
+                    data={bunnyVideos}
+                    keyExtractor={(item) => item.guid}
+                    showsVerticalScrollIndicator={false}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity 
+                          onPress={() => {
+                            const matchedLecture = allLectures.find(
+                              (lec) => lec.videoGuid && lec.videoGuid === item.guid
+                            );
+                            setSelectedLecture({
+                              ...item,
+                              id: matchedLecture ? matchedLecture.id : item.guid,
+                              title: item.title,
+                              videoGuid: item.guid,
+                            });
+                            setModalVisible(false);
+                          }}
+                          className={`p-4 mb-3 rounded-xl border ${selectedLecture?.guid === item.guid ? 'bg-indigo-50 border-indigo-500' : 'bg-white border-slate-100'}`}
+                        >
+                        <View className="flex-row items-center">
+                          <View className={`w-8 h-8 rounded-full items-center justify-center mr-3 ${selectedLecture?.guid === item.guid ? 'bg-indigo-500' : 'bg-slate-100'}`}>
+                            <Ionicons name="play" size={14} color={selectedLecture?.guid === item.guid ? 'white' : '#94a3b8'} />
+                          </View>
+                          <View>
+                            <Text className={`font-bold text-sm ${selectedLecture?.guid === item.guid ? 'text-indigo-900' : 'text-slate-700'}`}>{item.title}</Text>
+                            <Text className="text-xs text-slate-400 mt-0.5">ID: {item.guid}</Text>
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                  />
                 )}
             </View>
         </View>
