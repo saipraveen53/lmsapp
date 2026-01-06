@@ -243,7 +243,7 @@ const CourseDetailSidebar = ({ course, visible, onClose }: any) => {
                 </View>
                 <Text className="text-[10px] text-slate-300 font-mono">ID: {section.id}</Text>
             </LinearGradient>
-
+          <ScrollView style={{ maxHeight: height * 0.5 }} showsVerticalScrollIndicator={false}>
             <View className="bg-white p-2">
                 {section.lectures && section.lectures.length > 0 ? (
                     section.lectures.map((lecture: any) => (
@@ -256,7 +256,7 @@ const CourseDetailSidebar = ({ course, visible, onClose }: any) => {
                             <View className="w-20 h-14 bg-slate-200 rounded-md overflow-hidden mr-3 relative">
                                 <Image 
                                     // Use placeholder if thumbnail is null
-                                    source={{ uri: lecture.thumbnailUrl || "https://via.placeholder.com/150" }} 
+                                    source={{ uri: lecture.thumbnailUrl || "https://img.freepik.com/free-vector/gradient-ui-ux-background_23-2149052117.jpg" }} 
                                     className="w-full h-full"
                                     resizeMode="cover"
                                 />
@@ -284,6 +284,7 @@ const CourseDetailSidebar = ({ course, visible, onClose }: any) => {
                     <Text className="text-[10px] text-slate-400 text-center py-2 italic">No lectures found.</Text>
                 )}
             </View>
+          </ScrollView>
         </View>
     );
 
@@ -385,12 +386,13 @@ const CourseDetailSidebar = ({ course, visible, onClose }: any) => {
                                 <View className="mb-8 border-b border-slate-100 pb-6">
                                     {renderDescriptionContent()}
                                 </View>
-
+                              
                                 <View>
                                     <View className="flex-row justify-between items-end mb-4">
                                         <Text className="text-xl font-bold text-slate-800">Curriculum</Text>
                                         <Text className="text-xs text-slate-400">{sections.length} Sections</Text>
                                     </View>
+                                    
                                     {sections && sections.length > 0 ? (
                                         sections.map((section: any) => renderSectionItem(section))
                                     ) : (
@@ -399,7 +401,9 @@ const CourseDetailSidebar = ({ course, visible, onClose }: any) => {
                                             <Text className="text-slate-400 mt-2 text-xs">No curriculum content available.</Text>
                                         </View>
                                     )}
+                                   
                                 </View>
+                              
                             </View>
 
                         </View>

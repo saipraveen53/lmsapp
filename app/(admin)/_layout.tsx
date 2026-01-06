@@ -165,7 +165,7 @@ export default function AdminLayout() {
       <Drawer
         drawerContent={(props) => <CustomDrawerContent {...props} />}
         screenOptions={({ navigation }) => ({
-          headerBackground: () => (<LinearGradient colors={['#4338ca', '#e11d48']} style={{flex:1}} start={{x:0, y:0}} end={{x:1, y:0}} />),
+          headerBackground: () => (<LinearGradient colors={['#4338ca', '#e11d48']} style={{flex:1}} start={{x:0, y:0}} end={{x:0, y:0}} />),
           headerTintColor: '#fff',
           headerTitleStyle: { fontWeight: 'bold' },
           drawerActiveTintColor: '#4338ca',

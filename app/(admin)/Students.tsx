@@ -50,6 +50,7 @@ export default function Students() {
   
   const [showDropdown, setShowDropdown] = useState(false); 
   const [searchQuery, setSearchQuery] = useState("");
+  const [enrollmentStats, setEnrollmentStats] = useState<any>(null);
 
   // --- 1. FETCH COURSES ON MOUNT ---
   useEffect(() => {
@@ -71,25 +72,26 @@ export default function Students() {
 
   // --- 2. FETCH STUDENTS FOR SELECTED COURSE ---
   const handleSelectCourse = async (course: Course) => {
-    setSelectedCourse(course);
-    setShowDropdown(false); 
-    setLoadingStudents(true);
-    setStudents([]); 
+  setSelectedCourse(course);
+  setShowDropdown(false); 
+  setLoadingStudents(true);
+  setStudents([]); 
+  setEnrollmentStats(null);
 
-    try {
-      const response = await CourseApi.get(`http://192.168.0.139:8088/api/courses/${course.courseId}/students`);
-      setStudents(response.data?.data || []);
-    } catch (error) {
-      console.error("Failed to fetch students", error);
-    } finally {
-      setLoadingStudents(false);
-    }
-  };
+  try {
+    const statsRes = await CourseApi.get(`http://192.168.0.230:8088/api/courses/${course.courseId}/enrollment-stats`);
+    setEnrollmentStats(statsRes.data);
+    setStudents(statsRes.data?.enrolledStudents || []);
+  } catch (error) {
+    console.error("Failed to fetch students", error);
+  } finally {
+    setLoadingStudents(false);
+  }
+};
 
-  const filteredStudents = students.filter(s => 
-    s.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    s.collegeName?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+const filteredStudents = students.filter(s => 
+  s.fullName?.toLowerCase().includes(searchQuery.toLowerCase())
+);
 
   // --- RENDER ITEM: STUDENT CARD ---
   const renderStudentCard = ({ item }: { item: Student }) => (
@@ -148,6 +150,14 @@ export default function Students() {
                 <Text className="text-indigo-300 text-sm font-medium opacity-90">Manage enrollments & details</Text>
             </View>
         </View>
+
+        {enrollmentStats && (
+          <View className="px-4 mb-2">
+            <Text className="text-indigo-700 font-bold">
+              Total Enrolled: {enrollmentStats.totalEnrolledStudents}
+            </Text>
+          </View>
+        )}
 
         {/* --- COURSE SELECTOR BUTTON --- */}
         <View className="z-50"> 
