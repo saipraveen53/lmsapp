@@ -158,11 +158,14 @@ const Home = () => {
         const response = await CourseApi.post(`/api/courses/${selectedCourse.courseId}/enroll/${selectedCourse.libraryId}`, {}, config);
         
         if (response.status === 200 || response.data?.success) {
+            // --- FIX: Refresh enrollments IMMEDIATELY to update UI ---
+            await fetchEnrollments();
+
             Alert.alert("Success", "Enrollment Successful!", [
                 { 
                     text: "Start Learning", 
                     onPress: () => {
-                        fetchEnrollments(); 
+                        // Navigation handled by user clicking 'Continue Learning' now
                     } 
                 }
             ]);
