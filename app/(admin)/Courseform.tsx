@@ -20,7 +20,7 @@ import {
   View,
   useWindowDimensions
 } from "react-native";
-import { CourseApi } from "../(utils)/axiosInstance";
+import { rootApi } from "../(utils)/axiosInstance";
 
 // --- CONSTANTS ---
 const BUNNY_ACCESS_KEY = "eb8560ce-e8a6-414c-8e250605c6d5-627d-4c55"; // From your screenshot
@@ -299,7 +299,7 @@ export default function CourseForm() {
         price: parseFloat(form.price) || 0,
       };
 
-      const response = await CourseApi.post("/api/courses", payload);
+      const response = await rootApi.post("http://192.168.0.139:8088/api/courses", payload);
 
       if (response.status === 200 || response.status === 201) {
         setSubmitMessage("Course created successfully!");
@@ -536,10 +536,10 @@ export default function CourseForm() {
                     </View>
                   ))}
 
-                  <Pressable onPress={() => addLecture(sIndex)} className="flex-row items-center justify-center py-3 border border-dashed border-indigo-300 rounded-xl bg-indigo-50/50 mt-2">
+                  {/*<Pressable onPress={() => addLecture(sIndex)} className="flex-row items-center justify-center py-3 border border-dashed border-indigo-300 rounded-xl bg-indigo-50/50 mt-2">
                       <Ionicons name="videocam-outline" size={16} color="#4f46e5" />
                       <Text className="text-indigo-600 font-bold text-xs ml-2">Add Lecture</Text>
-                  </Pressable>
+                  </Pressable>*/}
                 </View>
               </View>
             ))}
