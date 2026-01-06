@@ -28,7 +28,6 @@ export default function ChangePassword() {
   }
 }
 
-// ---------------- SHARED LOGIC ----------------
 const useChangePassword = () => {
   const router = useRouter();
   const { logout } = useLms();
@@ -77,10 +76,9 @@ const useChangePassword = () => {
 
       const successMsg = "Password Updated Successfully! Please Login again.";
 
-      // --- [FIX] WEB REDIRECT LOGIC ---
       if (Platform.OS === 'web') {
           window.alert(successMsg);
-          logout(); // Directly call logout for web
+          logout(); 
       } else {
           Alert.alert("Success", successMsg, [
             { text: "OK", onPress: () => logout() }
@@ -106,7 +104,6 @@ const useChangePassword = () => {
   };
 };
 
-// ---------------- MOBILE UI (Matches ForgotPassword) ----------------
 const ChangePasswordMobile = () => {
   const logic = useChangePassword();
 
@@ -177,7 +174,6 @@ const ChangePasswordMobile = () => {
   );
 };
 
-// ---------------- WEB UI (Matches ForgotPassword Web) ----------------
 const ChangePasswordWeb = () => {
   const logic = useChangePassword();
 

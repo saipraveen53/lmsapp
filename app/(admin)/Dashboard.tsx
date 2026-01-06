@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
 import { jwtDecode } from "jwt-decode";
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -12,7 +13,7 @@ import {
   useWindowDimensions,
   View
 } from "react-native";
-import { rootApi } from "../(utils)/axiosInstance";
+import { CourseApi } from "../(utils)/axiosInstance";
 // import "../globals.css"; 
 
 // --- TYPES & DATA ---
@@ -57,6 +58,7 @@ export default function Dashboard() {
   
   // --- NEW STATE: Total Videos Count ---
   const [totalVideos, setTotalVideos] = useState<number>(0);
+  const [bunnyVideoCounts, setBunnyVideoCounts] = useState<{ [courseId: string]: number }>({});
   
   // --- STATE: Controls initial display limit ---
   const [showAllCourses, setShowAllCourses] = useState(false);
@@ -80,8 +82,8 @@ export default function Dashboard() {
   const [username, setUserName] = useState("Admin");
 
   useEffect(() => {
-    rootApi
-      .get("http://192.168.0.116:8088/api/courses")
+    CourseApi
+      .get("/api/courses")
       .then((res) => {
         const rawData = res.data?.data || [];
         
@@ -109,6 +111,7 @@ export default function Dashboard() {
             isPaid: !c.isFree,
             videos: courseLecturesCount,
             status: c.isPublished ? "active" : "inactive",
+            libraryId: c.libraryId,
           };
         });
 
@@ -142,18 +145,47 @@ export default function Dashboard() {
   const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
   useEffect(() => {
-    rootApi
-      .get("http://192.168.0.116:8088/api/courses/count")
+    CourseApi
+      .get("/api/courses/count")
       .then((res) => {
         setTotalCourses(res.data?.data || 0);
       })
       .catch(() => setTotalCourses(0));
   }, []);
 
+  useEffect(() => {
+    const fetchBunnyCounts = async () => {
+      const counts: { [courseId: string]: number } = {};
+      await Promise.all(
+        recentCourses
+          .filter((c) => c.libraryId)
+          .map(async (c) => {
+            try {
+              const url = `https://video.bunnycdn.com/library/${c.libraryId}/videos?page=1&itemsPerPage=1`;
+              const res = await axios.get(url, {
+                headers: {
+                  AccessKey: "eb8560ce-e8a6-414c-8e250605c6d5-627d-4c55",
+                  Accept: "application/json",
+                },
+              });
+              counts[c.courseId] = res.data.totalItems || 0;
+            } catch {
+              counts[c.courseId] = 0;
+            }
+          })
+      );
+      setBunnyVideoCounts(counts);
+    };
+
+    if (recentCourses.length > 0) {
+      fetchBunnyCounts();
+    }
+  }, [recentCourses]);
   // --- LOGIC: Determine which courses to display ---
   // If showAllCourses is true, show everything.
   // If false, slice the first 5.
   const displayedCourses = showAllCourses ? recentCourses : recentCourses.slice(0, 5);
+  const totalBunnyVideos = Object.values(bunnyVideoCounts).reduce((sum, count) => sum + count, 0);
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
@@ -193,9 +225,9 @@ export default function Dashboard() {
             width={cardWidth} 
           />
           {/* UPDATED: Uses dynamic totalVideos state */}
-          <StatCard 
+         <StatCard 
             title="Content Library" 
-            value={`${totalVideos} Videos`} 
+            value={`${totalBunnyVideos} Videos`} 
             icon="play-circle-outline" 
             theme="orange"
             width={cardWidth} 
@@ -254,7 +286,7 @@ export default function Dashboard() {
                     </Text>
                     <View className="flex-row items-center mt-1">
                       <Ionicons name="film-outline" size={12} color="#94a3b8" />
-                      <Text className="text-xs text-slate-500 ml-1 mr-3">{c.videos} Lessons</Text>
+                      <Text className="text-xs text-slate-500 ml-1 mr-3">{c.libraryId ? (bunnyVideoCounts[c.courseId] ?? "...") : 0} Lessons</Text>
                       {isDesktop && (
                         <Text
                           className={`text-xs capitalize font-medium ${
