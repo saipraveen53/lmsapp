@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient'; // ADDED IMPORT
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -25,23 +26,31 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// --- INTERFACES ---
-interface VideoItem {
-  guid: string;
-  videoLibraryId: number;
+// --- UPDATED INTERFACE BASED ON BACKEND RESPONSE ---
+interface LectureItem {
+  id: number;
   title: string;
-  dateUploaded: string;
-  views: number;
-  length: number;
-  status: number;
+  videoGuid: string;
+  videoLibraryId: number;
+  description: string;
+  thumbnailUrl: string | null;
+  isPreview: boolean;
+  orderIndex: number;
+  allowDownload: boolean;
+  // Optional fields for UI compatibility if needed later
+  length?: number; 
 }
 
 const VideoListByLibrary = () => {
   const { id, courseId } = useLocalSearchParams(); 
   const router = useRouter();
-  const [videos, setVideos] = useState<VideoItem[]>([]);
+  
+  // State now uses LectureItem
+  const [videos, setVideos] = useState<LectureItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentVideo, setCurrentVideo] = useState<string | null>(null);
+  
+  // Store the GUID of the currently playing video
+  const [currentVideoGuid, setCurrentVideoGuid] = useState<string | null>(null);
   
   // --- QUIZ & MAPPING STATE ---
   const [grandQuiz, setGrandQuiz] = useState<any>(null);
@@ -51,56 +60,46 @@ const VideoListByLibrary = () => {
   const scrollY = useRef(new Animated.Value(0)).current;
 
   // --- FILTER LOGIC ---
-  const displayedVideos = currentVideo 
-    ? videos.filter(v => v.guid !== currentVideo) 
+  const displayedVideos = currentVideoGuid 
+    ? videos.filter(v => v.videoGuid !== currentVideoGuid) 
     : videos;
 
-  // --- 1. FETCH VIDEOS (BunnyCDN) ---
-  useEffect(() => {
-    const fetchVideos = async () => {
-      if (!id) return;
-      try {
-        const response = await fetch(
-          `https://video.bunnycdn.com/library/${id}/videos`, 
-          {
-            method: "GET",
-            headers: {
-              AccessKey: "eb8560ce-e8a6-414c-8e250605c6d5-627d-4c55", 
-              Accept: "application/json",
-            },
-          }
-        );
-        const data = await response.json();
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        setVideos(data.items || []); 
-      } catch (error) {
-        console.error("Error fetching videos:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchVideos();
-  }, [id]);
-
-  // --- 2. FETCH COURSE & QUIZZES (Backend) ---
+  // --- FETCH COURSE & VIDEOS (Backend Only) ---
   useEffect(() => {
     const fetchCourseAndQuizzes = async () => {
         if (!courseId) return;
+        setLoading(true);
 
         try {
-            // A. Fetch Course to map VideoGUID -> LectureID
+            // A. Fetch Course Data (Now serves as the Video Source)
             const courseRes = await CourseApi.get(`/api/courses/${courseId}`);
+            
             if (courseRes.data && courseRes.data.success) {
                 const courseData = courseRes.data.data;
-                const mapping: { [key: string]: number } = {};
+                const lectures: LectureItem[] = courseData.lectures || [];
                 
-                courseData.sections?.forEach((sec: any) => {
-                    sec.lectures?.forEach((lec: any) => {
-                        if (lec.videoGuid) {
-                            mapping[lec.videoGuid] = lec.id;
-                        }
-                    });
+                // 1. Set Videos for the list
+                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                setVideos(lectures);
+
+                // 2. Create Map: VideoGUID -> LectureID
+                const mapping: { [key: string]: number } = {};
+                lectures.forEach((lec) => {
+                    if (lec.videoGuid) {
+                        mapping[lec.videoGuid] = lec.id;
+                    }
                 });
+                
+                // If the response structure supports nested sections, handle that too (fallback)
+                if (courseData.sections) {
+                     courseData.sections.forEach((sec: any) => {
+                        sec.lectures?.forEach((lec: any) => {
+                            if (lec.videoGuid) {
+                                mapping[lec.videoGuid] = lec.id;
+                            }
+                        });
+                    });
+                }
                 setGuidToLectureMap(mapping);
             }
 
@@ -128,7 +127,9 @@ const VideoListByLibrary = () => {
             }
 
         } catch (error) {
-            console.log("Error fetching course/quiz details:", error);
+            console.error("Error fetching course/quiz details:", error);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -139,41 +140,59 @@ const VideoListByLibrary = () => {
   // --- HANDLERS ---
   const handleVideoPress = (guid: string) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setCurrentVideo(guid);
+    setCurrentVideoGuid(guid);
   };
 
   // --- NAVIGATE TO EXAM SCREEN ---
   const handleTakeQuiz = (quizData: any) => {
-      // We pass the full quizData stringified because our backend now returns questions inside it
       router.push({ 
           pathname: "/(student)/ExamScreen", 
           params: { 
-              quizId: quizData.quizId, // Note: DTO field is 'quizId' not 'id'
+              quizId: quizData.quizId,
               quizType: quizData.quizType,
               quizData: JSON.stringify(quizData) 
           } 
       });
   };
 
+  // --- FULL SCREEN HANDLERS FOR ANDROID ---
+  const handleFullScreenOpen = async () => {
+    if (Platform.OS === 'android') {
+      StatusBar.setHidden(true);
+      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+    }
+  };
+
+  const handleFullScreenClose = async () => {
+    if (Platform.OS === 'android') {
+      StatusBar.setHidden(false);
+      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+    }
+  };
+
   // --- RENDER HELPERS ---
-  const formatDuration = (seconds: number) => {
+  // Note: Backend response doesn't provide duration per video in the sample. 
+  // We keep the helper but safely handle missing length.
+  const formatDuration = (seconds?: number) => {
+    if (!seconds) return ""; 
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
-
   // --- PLAYER COMPONENT ---
   const renderPlayer = () => {
-    if (!currentVideo) return null;
+    if (!currentVideoGuid) return null;
 
-    const embedUrl = `https://iframe.mediadelivery.net/embed/${id}/${currentVideo}?autoplay=true`;
+    // Find the current lecture object to get the correct library ID
+    const currentLecture = videos.find(v => v.videoGuid === currentVideoGuid);
+    // Fallback to the ID from params if not found in object (safety check)
+    const libId = currentLecture?.videoLibraryId || id; 
+
+    // Construct BunnyCDN Embed URL
+    const embedUrl = `https://iframe.mediadelivery.net/embed/${libId}/${currentVideoGuid}?autoplay=true`;
     
-    const currentLectureId = guidToLectureMap[currentVideo];
+    const currentLectureId = guidToLectureMap[currentVideoGuid];
     const currentQuiz = currentLectureId ? lectureQuizzes[currentLectureId] : null;
 
     return (
@@ -188,12 +207,14 @@ const VideoListByLibrary = () => {
             />
           ) : (
             <WebView
-              key={currentVideo}
+              key={currentVideoGuid}
               source={{ uri: embedUrl }}
               javaScriptEnabled={true}
               domStorageEnabled={true}
               allowsFullscreenVideo={true}
               style={{ flex: 1, backgroundColor: '#000' }}
+              onFullScreenOpen={handleFullScreenOpen} 
+              onFullScreenClose={handleFullScreenClose} 
             />
           )}
         </View>
@@ -215,7 +236,11 @@ const VideoListByLibrary = () => {
             style={styles.closeButton} 
             onPress={() => {
                 LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                setCurrentVideo(null);
+                setCurrentVideoGuid(null);
+                if (Platform.OS === 'android') {
+                    StatusBar.setHidden(false);
+                    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+                }
             }}
         >
             <Text style={styles.closeText}>Close Player ✕</Text>
@@ -259,7 +284,7 @@ const VideoListByLibrary = () => {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#4f46e5" />
-        <Text style={{ marginTop: 10, color: '#6366f1' }}>Loading Videos...</Text>
+        <Text style={{ marginTop: 10, color: '#6366f1' }}>Loading Content...</Text>
       </View>
     );
   }
@@ -270,18 +295,18 @@ const VideoListByLibrary = () => {
       
       {renderPlayer()}
 
-      {!currentVideo && (
+      {!currentVideoGuid && (
         <View style={styles.header}>
             <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 10 }}>
                 <Ionicons name="arrow-back" size={24} color="#0f172a" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Course Videos</Text>
+            <Text style={styles.headerTitle}>Course Content</Text>
         </View>
       )}
 
       <Animated.FlatList
         data={displayedVideos} 
-        keyExtractor={(item) => item.guid}
+        keyExtractor={(item) => item.videoGuid}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         ListFooterComponent={renderFooter}
@@ -296,39 +321,42 @@ const VideoListByLibrary = () => {
              outputRange: [1, 1, 1, 0.8]
           });
 
-          const lecId = guidToLectureMap[item.guid];
+          // Map using videoGuid now
+          const lecId = guidToLectureMap[item.videoGuid];
           const hasQuiz = lecId && lectureQuizzes[lecId];
 
           return (
             <Animated.View style={{ opacity }}>
                 <TouchableOpacity 
                   activeOpacity={0.7}
-                  onPress={() => handleVideoPress(item.guid)}
+                  onPress={() => handleVideoPress(item.videoGuid)}
                   style={styles.card}
                 >
                   <View style={styles.thumbnailContainer}>
-                     <Image 
-                        source={{ uri: "https://img.freepik.com/free-vector/gradient-ui-ux-background_23-2149052117.jpg" }} 
+                      <Image 
+                        source={{ uri: item.thumbnailUrl || "https://img.freepik.com/free-vector/gradient-ui-ux-background_23-2149052117.jpg" }} 
                         style={styles.thumbnailImage}
                         resizeMode="cover"
-                     />
-                     <View style={styles.playIconOverlay}>
+                      />
+                      <View style={styles.playIconOverlay}>
                         <Ionicons name="play-circle" size={28} color="rgba(255,255,255,0.9)" />
-                     </View>
-                     <View style={styles.durationBadge}>
-                        <Text style={styles.durationText}>{formatDuration(item.length)}</Text>
-                     </View>
+                      </View>
+                      {item.length ? (
+                          <View style={styles.durationBadge}>
+                            <Text style={styles.durationText}>{formatDuration(item.length)}</Text>
+                          </View>
+                      ) : null}
                   </View>
 
                   <View style={styles.cardContent}>
                     <View style={styles.textContainer}>
                         <Text style={styles.videoTitle} numberOfLines={2}>
-                          {item.title.replace('.mp4', '').replace(/_/g, ' ')}
+                          {item.title ? item.title.replace('.mp4', '').replace(/_/g, ' ') : 'Untitled Lecture'}
                         </Text>
+                        
                         <View style={styles.metaRow}>
-                            <Text style={styles.metaText}>
-                                {item.views} views • {formatDate(item.dateUploaded)}
-                            </Text>
+                           {/* Backend doesn't send views/date yet, so we just show generic 'Lecture' text or nothing */}
+                            <Text style={styles.metaText}>Lecture {index + 1}</Text>
                         </View>
                         
                         {hasQuiz && (
@@ -339,12 +367,6 @@ const VideoListByLibrary = () => {
                         )}
                     </View>
                   </View>
-                  
-                  {item.status !== 4 && (
-                      <View style={styles.processingOverlay}>
-                          <Text style={styles.processingText}>Processing...</Text>
-                      </View>
-                  )}
                 </TouchableOpacity>
             </Animated.View>
           );
@@ -352,7 +374,7 @@ const VideoListByLibrary = () => {
         ListEmptyComponent={
             <View style={styles.emptyContainer}>
                 <Ionicons name="film-outline" size={60} color="#cbd5e1" />
-                <Text style={styles.emptyText}>No videos available.</Text>
+                <Text style={styles.emptyText}>No lectures available.</Text>
             </View>
         }
       />
@@ -381,8 +403,6 @@ const styles = StyleSheet.create({
   videoTitle: { fontSize: 14, fontWeight: '600', color: '#0f172a', lineHeight: 18, marginBottom: 4 },
   metaRow: { flexDirection: 'row', alignItems: 'center' },
   metaText: { fontSize: 11, color: '#64748b' },
-  processingOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,0.7)', justifyContent: 'center', alignItems: 'center', borderRadius: 8 },
-  processingText: { color: '#2563eb', fontSize: 10, fontWeight: 'bold' },
   emptyContainer: { alignItems: 'center', marginTop: 80 },
   emptyText: { marginTop: 12, color: '#94a3b8', fontSize: 14 },
   quizButton: {

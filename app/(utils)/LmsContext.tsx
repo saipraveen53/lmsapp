@@ -21,7 +21,7 @@ interface LmsContextType {
   isLoading: boolean;
   login: (email: string, pass: string, forceLogin?: boolean) => Promise<AuthResponse>;
   register: (userData: any) => Promise<AuthResponse>;
-  logout: () => void;
+  logout: () => Promise<void>; // Updated return type to Promise<void>
 }
 
 const Context = createContext<LmsContextType | undefined>(undefined);
@@ -162,13 +162,27 @@ const LmsContext = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // --- MAJOR FIX: LOGOUT LOGIC ---
   const logout = async () => {
-    try { await api.post('/api/auth/logout'); } catch (e) {}
-    await AsyncStorage.removeItem('accessToken');
-    await AsyncStorage.removeItem('userRole');
-    setUser(null);
-    delete api.defaults.headers.common['Authorization'];
-    router.replace('/');
+    try {
+      // 1. Call Backend Logout API FIRST (Token is still valid in headers)
+      console.log("Logging out from backend...");
+      await api.post('/api/auth/logout'); 
+    } catch (e) {
+      console.log("Logout API call failed or network error", e);
+    } finally {
+      // 2. Clear Local Data ALWAYS (even if API fails)
+      console.log("Clearing local session...");
+      await AsyncStorage.removeItem('accessToken');
+      await AsyncStorage.removeItem('userRole');
+      
+      // 3. Clear State & Headers
+      setUser(null);
+      delete api.defaults.headers.common['Authorization'];
+      
+      // 4. Redirect to Login
+      router.replace('/');
+    }
   };
 
   return (
