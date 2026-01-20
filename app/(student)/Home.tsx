@@ -45,6 +45,10 @@ const Home = () => {
   const [confirmModalVisible, setConfirmModalVisible] = useState(false);
   const [isEnrolling, setIsEnrolling] = useState(false);
 
+  // Payment State
+  const [paymentModalVisible, setPaymentModalVisible] = useState(false);
+  const [isPaying, setIsPaying] = useState(false);
+
   const hasAnyEnrollment = enrollments.length > 0;
 
   // --- WEB LAYOUT LOGIC ---
@@ -139,7 +143,17 @@ const Home = () => {
 
   const initiateEnroll = () => {
       if(!selectedCourse) return;
-      setConfirmModalVisible(true);
+      if (!selectedCourse.isFree) {
+          setPaymentModalVisible(true);
+      } else {
+          setConfirmModalVisible(true);
+      }
+  };
+
+  const handlePaymentSuccess = async () => {
+    setPaymentModalVisible(false);
+    // After successful "payment", we proceed to enroll
+    await processEnrollment();
   };
 
   const processEnrollment = async () => {
@@ -154,19 +168,14 @@ const Home = () => {
             config = { headers: { 'Authorization': `Bearer ${token}` } };
         }
 
-        // UPDATED: Used selectedCourse.libraryId instead of selectedCourse.videoLibraryId
         const response = await CourseApi.post(`/api/courses/${selectedCourse.courseId}/enroll/${selectedCourse.libraryId}`, {}, config);
         
         if (response.status === 200 || response.data?.success) {
-            // --- FIX: Refresh enrollments IMMEDIATELY to update UI ---
             await fetchEnrollments();
-
-            Alert.alert("Success", "Enrollment Successful!", [
+            Alert.alert("Success", !selectedCourse.isFree ? "Payment & Enrollment Successful!" : "Enrollment Successful!", [
                 { 
                     text: "Start Learning", 
-                    onPress: () => {
-                        // Navigation handled by user clicking 'Continue Learning' now
-                    } 
+                    onPress: () => {} 
                 }
             ]);
         }
@@ -179,12 +188,11 @@ const Home = () => {
     }
   };
 
-  // --- UPDATED NAVIGATION LOGIC ---
+  // --- NAVIGATION LOGIC ---
   const handleContinueLearning = () => {
     if (!isWeb) setCourseModalVisible(false);
     
     const enrollment = enrollments.find(e => e.courseId === selectedCourse?.courseId);
-    // Check both potential field names just in case enrollment object differs
     const libId = enrollment?.videoLibraryId || enrollment?.libraryId;
 
     if (libId) {
@@ -192,7 +200,7 @@ const Home = () => {
             pathname: "/(videos)/[id]", 
             params: { 
                 id: libId, 
-                courseId: selectedCourse.courseId // Essential for fetching Quizzes
+                courseId: selectedCourse.courseId
             } 
         });
     } else {
@@ -211,7 +219,9 @@ const Home = () => {
       if (!selectedCourse) return null;
       
       const isEnrolled = enrollments.some(e => e.courseId === selectedCourse.courseId);
-      const isLocked = !isEnrolled && hasAnyEnrollment;
+      // For Paid courses, we show Buy button instead of Locked, so isLocked is strictly for free items logic if applicable
+      const isPaid = !selectedCourse.isFree;
+      const isLocked = !isEnrolled && hasAnyEnrollment && !isPaid; 
 
       return (
         <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 50 }}>
@@ -246,7 +256,7 @@ const Home = () => {
 
             <View className="flex-row items-center mb-6 space-x-4 bg-gray-50 p-3 rounded-lg border border-gray-100">
                 <Text className="text-gray-600 text-xs font-bold">🕒 {formatDuration(selectedCourse.totalDuration)}</Text>
-                <Text className="text-gray-600 text-xs font-bold ml-3">📹 {selectedCourse.totalLectures} Lessons</Text>
+                <Text className="text-gray-600 text-xs font-bold ml-3">📹 {selectedCourse.totalLectures || 0} Lessons</Text>
             </View>
 
             <Text className="text-lg font-bold text-gray-900 mb-2">About Course</Text>
@@ -260,6 +270,16 @@ const Home = () => {
                 >
                     <Text className="text-white text-center font-bold text-lg tracking-wide mr-2">Continue Learning</Text>
                     <Ionicons name="play-circle" size={20} color="white" />
+                </TouchableOpacity>
+            ) : isPaid ? (
+                <TouchableOpacity 
+                    activeOpacity={0.8} 
+                    onPress={initiateEnroll}
+                    disabled={isEnrolling}
+                    className="bg-indigo-900 py-4 rounded-xl shadow-lg shadow-indigo-200 mt-2 mb-8 hover:bg-indigo-800 active:scale-95 transition-all duration-200 flex-row justify-center items-center"
+                >
+                    <Text className="text-white text-center font-bold text-lg tracking-wide mr-2">Buy for ₹{selectedCourse.price}</Text>
+                    <Ionicons name="card-outline" size={20} color="white" />
                 </TouchableOpacity>
             ) : isLocked ? (
                 <TouchableOpacity 
@@ -342,7 +362,9 @@ const Home = () => {
                         {courses.map((course: any) => {
                             const isEnrolled = enrollments.some(e => e.courseId === course.courseId);
                             const isSelected = isWeb && selectedCourse?.courseId === course.courseId;
-                            const isLocked = !isEnrolled && hasAnyEnrollment;
+                            // Logic: If Paid -> Never locked, always show 'Buy' (unless enrolled). If Free -> Apply old locking logic
+                            const isPaid = !course.isFree;
+                            const isLocked = !isPaid && !isEnrolled && hasAnyEnrollment;
                             
                             return (
                                 <TouchableOpacity
@@ -372,6 +394,11 @@ const Home = () => {
                                                 <View className="flex-row items-center bg-green-50 px-2 py-1 rounded-full">
                                                     <Ionicons name="checkmark-circle" size={12} color="#16a34a" />
                                                     <Text className="text-green-600 text-[10px] font-bold ml-1">Enrolled</Text>
+                                                </View>
+                                            ) : isPaid ? (
+                                                <View className="flex-row items-center bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
+                                                     <Ionicons name="cart-outline" size={12} color="#4338ca" />
+                                                     <Text className="text-indigo-700 text-[10px] font-bold ml-1">Buy Now</Text>
                                                 </View>
                                             ) : isLocked ? (
                                                 <View className="flex-row items-center bg-gray-100 px-2 py-1 rounded-full">
@@ -405,6 +432,7 @@ const Home = () => {
           )}
       </View>
 
+      {/* Confirmation Modal (Free Courses) */}
       <Modal animationType="fade" transparent={true} visible={confirmModalVisible} onRequestClose={() => setConfirmModalVisible(false)}>
         <View className="flex-1 justify-center items-center bg-black/50 backdrop-blur-sm">
             <View className="bg-white p-6 rounded-2xl w-[90%] max-w-sm shadow-2xl scale-100">
@@ -418,6 +446,93 @@ const Home = () => {
         </View>
       </Modal>
 
+      {/* Payment Modal (Paid Courses) */}
+      <Modal animationType="slide" transparent={true} visible={paymentModalVisible} onRequestClose={() => !isPaying && setPaymentModalVisible(false)}>
+        <View className="flex-1 justify-end sm:justify-center items-center bg-black/60">
+            <View className="bg-white w-full sm:w-[450px] sm:rounded-2xl rounded-t-3xl p-6 shadow-xl h-[80%] sm:h-auto">
+                <View className="flex-row justify-between items-center mb-6 pb-4 border-b border-gray-100">
+                     <Text className="text-xl font-bold text-gray-800">Secure Payment</Text>
+                     {!isPaying && (
+                        <TouchableOpacity onPress={() => setPaymentModalVisible(false)} className="p-2 bg-gray-100 rounded-full">
+                            <Text className="text-gray-500 font-bold">✕</Text>
+                        </TouchableOpacity>
+                     )}
+                </View>
+
+                <View className="mb-6">
+                    <Text className="text-gray-500 text-sm mb-1">Course</Text>
+                    <Text className="text-lg font-bold text-gray-800 mb-4">{selectedCourse?.title}</Text>
+                    
+                    <Text className="text-gray-500 text-sm mb-1">Amount to Pay</Text>
+                    <Text className="text-3xl font-black text-indigo-600">₹{selectedCourse?.price}</Text>
+                </View>
+
+                <View className="space-y-4 mb-8">
+                    <View>
+                        <Text className="text-gray-700 font-medium mb-2">Card Number</Text>
+                        <TextInput 
+                            placeholder="0000 0000 0000 0000" 
+                            className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-800"
+                            keyboardType="numeric"
+                            maxLength={16}
+                        />
+                    </View>
+                    <View className="flex-row gap-4">
+                        <View className="flex-1">
+                            <Text className="text-gray-700 font-medium mb-2">Expiry Date</Text>
+                            <TextInput 
+                                placeholder="MM/YY" 
+                                className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-800"
+                                maxLength={5}
+                            />
+                        </View>
+                        <View className="flex-1">
+                            <Text className="text-gray-700 font-medium mb-2">CVV</Text>
+                            <TextInput 
+                                placeholder="123" 
+                                className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-800"
+                                keyboardType="numeric"
+                                maxLength={3}
+                                secureTextEntry
+                            />
+                        </View>
+                    </View>
+                </View>
+
+                <TouchableOpacity 
+                    onPress={() => {
+                        setIsPaying(true);
+                        // Simulate API Delay
+                        setTimeout(() => {
+                            setIsPaying(false);
+                            handlePaymentSuccess();
+                        }, 2000);
+                    }}
+                    disabled={isPaying}
+                    className="bg-indigo-600 py-4 rounded-xl shadow-lg shadow-indigo-200 active:scale-95 transition-all flex-row justify-center items-center"
+                >
+                    {isPaying ? (
+                         <View className="flex-row items-center">
+                            <ActivityIndicator color="white" size="small" />
+                            <Text className="text-white font-bold ml-2">Processing Payment...</Text>
+                         </View>
+                    ) : (
+                        <>
+                            <Text className="text-white font-bold text-lg mr-2">Pay ₹{selectedCourse?.price}</Text>
+                            <Ionicons name="lock-closed-outline" size={18} color="white" />
+                        </>
+                    )}
+                </TouchableOpacity>
+
+                <View className="flex-row justify-center items-center mt-4">
+                    <Ionicons name="shield-checkmark-outline" size={14} color="#6b7280" />
+                    <Text className="text-gray-400 text-xs ml-1">Payments are secure and encrypted</Text>
+                </View>
+            </View>
+        </View>
+      </Modal>
+
+      {/* Course Details Modal (Mobile) */}
       <Modal animationType="slide" visible={courseModalVisible} presentationStyle="pageSheet" onRequestClose={() => setCourseModalVisible(false)}>
         {selectedCourse && (
             <View className="flex-1 bg-white">
