@@ -1,32 +1,39 @@
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import * as ScreenOrientation from 'expo-screen-orientation';
-import React, { useEffect, useRef, useState } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import * as ScreenOrientation from "expo-screen-orientation";
+import React, { useEffect, useState } from "react";
+import { Dimensions, Platform, StatusBar } from "react-native";
+import { WebView } from "react-native-webview";
+
+// --- ANIMATION IMPORTS ---
+import { AnimatePresence, MotiView } from "moti";
+import Animated, {
+  useAnimatedScrollHandler,
+  useSharedValue,
+} from "react-native-reanimated";
+
+// --- NATIVEBASE IMPORTS ---
 import {
-  ActivityIndicator,
-  Animated,
-  Image,
-  LayoutAnimation,
-  Platform,
-  StatusBar,
-  StyleSheet,
+  Badge,
+  Box,
+  Button,
+  Center,
+  Heading,
+  HStack,
+  Icon,
+  IconButton,
+  Pressable,
+  Spinner,
   Text,
-  TouchableOpacity,
-  UIManager,
-  View
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { WebView } from 'react-native-webview';
-// --- IMPORTS FOR QUIZ ---
-import { CourseApi, QuizApi } from '../(utils)/axiosInstance';
+  VStack,
+  ZStack,
+} from "native-base";
 
-// Enable LayoutAnimation for Android
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+// --- API ---
+import { CourseApi, QuizApi } from "../(utils)/axiosInstance";
 
-// --- UPDATED INTERFACE BASED ON BACKEND RESPONSE ---
+// --- TYPES ---
 interface LectureItem {
   id: number;
   title: string;
@@ -37,424 +44,664 @@ interface LectureItem {
   isPreview: boolean;
   orderIndex: number;
   allowDownload: boolean;
-  // Optional fields for UI compatibility if needed later
-  length?: number; 
+  length?: number;
 }
 
+const { width } = Dimensions.get("window");
+
+// --- VISUAL THEMES FOR CARDS ---
+const CARD_THEMES = [
+  {
+    colors: ["#4F46E5", "#818CF8"] as const, // Indigo
+    icon: "play-circle",
+    secondaryIcon: "code-slash",
+    shape: "circle",
+  },
+  {
+    colors: ["#DB2777", "#F472B6"] as const, // Pink
+    icon: "layers",
+    secondaryIcon: "images",
+    shape: "square",
+  },
+  {
+    colors: ["#059669", "#34D399"] as const, // Emerald
+    icon: "flask",
+    secondaryIcon: "leaf",
+    shape: "blob",
+  },
+  {
+    colors: ["#D97706", "#FBBF24"] as const, // Amber
+    icon: "bulb",
+    secondaryIcon: "flash",
+    shape: "triangle",
+  },
+  {
+    colors: ["#0891B2", "#22D3EE"] as const, // Cyan
+    icon: "cube",
+    secondaryIcon: "analytics",
+    shape: "circle",
+  },
+];
+
 const VideoListByLibrary = () => {
-  const { id, courseId } = useLocalSearchParams(); 
+  const { id, courseId } = useLocalSearchParams();
   const router = useRouter();
-  
-  // State now uses LectureItem
+
+  // --- STATE ---
   const [videos, setVideos] = useState<LectureItem[]>([]);
   const [loading, setLoading] = useState(true);
-  
-  // Store the GUID of the currently playing video
   const [currentVideoGuid, setCurrentVideoGuid] = useState<string | null>(null);
-  
-  // --- QUIZ & MAPPING STATE ---
+
+  // --- QUIZ STATE ---
   const [grandQuiz, setGrandQuiz] = useState<any>(null);
-  const [lectureQuizzes, setLectureQuizzes] = useState<{ [key: number]: any }>({}); 
-  const [guidToLectureMap, setGuidToLectureMap] = useState<{ [key: string]: number }>({}); 
+  const [lectureQuizzes, setLectureQuizzes] = useState<{ [key: number]: any }>(
+    {},
+  );
+  const [guidToLectureMap, setGuidToLectureMap] = useState<{
+    [key: string]: number;
+  }>({});
 
-  const scrollY = useRef(new Animated.Value(0)).current;
+  // --- SCROLL ANIMATION VALUE ---
+  const scrollY = useSharedValue(0);
+  const scrollHandler = useAnimatedScrollHandler((event) => {
+    scrollY.value = event.contentOffset.y;
+  });
 
-  // --- FILTER LOGIC ---
-  const displayedVideos = currentVideoGuid 
-    ? videos.filter(v => v.videoGuid !== currentVideoGuid) 
-    : videos;
-
-  // --- FETCH COURSE & VIDEOS (Backend Only) ---
+  // --- FETCH DATA ---
   useEffect(() => {
     const fetchCourseAndQuizzes = async () => {
-        if (!courseId) return;
-        setLoading(true);
+      if (!courseId) return;
+      setLoading(true);
 
-        try {
-            // A. Fetch Course Data (Now serves as the Video Source)
-            const courseRes = await CourseApi.get(`/api/courses/${courseId}`);
-            
-            if (courseRes.data && courseRes.data.success) {
-                const courseData = courseRes.data.data;
-                const lectures: LectureItem[] = courseData.lectures || [];
-                
-                // 1. Set Videos for the list
-                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                setVideos(lectures);
+      try {
+        // A. Fetch Course Data
+        const courseRes = await CourseApi.get(`/api/courses/${courseId}`);
+        if (courseRes.data && courseRes.data.success) {
+          const courseData = courseRes.data.data;
+          const lectures: LectureItem[] = courseData.lectures || [];
+          setVideos(lectures);
 
-                // 2. Create Map: VideoGUID -> LectureID
-                const mapping: { [key: string]: number } = {};
-                lectures.forEach((lec) => {
-                    if (lec.videoGuid) {
-                        mapping[lec.videoGuid] = lec.id;
-                    }
-                });
-                
-                // If the response structure supports nested sections, handle that too (fallback)
-                if (courseData.sections) {
-                     courseData.sections.forEach((sec: any) => {
-                        sec.lectures?.forEach((lec: any) => {
-                            if (lec.videoGuid) {
-                                mapping[lec.videoGuid] = lec.id;
-                            }
-                        });
-                    });
-                }
-                setGuidToLectureMap(mapping);
-            }
+          // Map GUID to ID
+          const mapping: { [key: string]: number } = {};
+          lectures.forEach((lec) => {
+            if (lec.videoGuid) mapping[lec.videoGuid] = lec.id;
+          });
 
-            // B. Fetch All Quizzes for Course
-            const quizRes = await QuizApi.get(`/api/quizzes/course/${courseId}`);
-            if (quizRes.data) {
-                const quizzes = quizRes.data; 
-                const qMap: { [key: number]: any } = {};
-                quizzes.forEach((q: any) => {
-                    if (q.quizType === 'LECTURE' && q.lectureId) {
-                        qMap[q.lectureId] = q;
-                    }
-                });
-                setLectureQuizzes(qMap);
-            }
-
-            // C. Fetch Grand Quiz specifically
-            try {
-                const grandRes = await QuizApi.get(`/api/quizzes/course/${courseId}/grand`);
-                if (grandRes.data) {
-                    setGrandQuiz(grandRes.data);
-                }
-            } catch (e) {
-                console.log("No Grand Quiz found");
-            }
-
-        } catch (error) {
-            console.error("Error fetching course/quiz details:", error);
-        } finally {
-            setLoading(false);
+          // Handle Sections if present
+          if (courseData.sections) {
+            courseData.sections.forEach((sec: any) => {
+              sec.lectures?.forEach((lec: any) => {
+                if (lec.videoGuid) mapping[lec.videoGuid] = lec.id;
+              });
+            });
+          }
+          setGuidToLectureMap(mapping);
         }
+
+        // B. Fetch Quizzes
+        const quizRes = await QuizApi.get(`/api/quizzes/course/${courseId}`);
+        if (quizRes.data) {
+          const quizzes = quizRes.data;
+          const qMap: { [key: number]: any } = {};
+          quizzes.forEach((q: any) => {
+            if (q.quizType === "LECTURE" && q.lectureId) {
+              qMap[q.lectureId] = q;
+            }
+          });
+          setLectureQuizzes(qMap);
+        }
+
+        // C. Fetch Grand Quiz
+        try {
+          const grandRes = await QuizApi.get(
+            `/api/quizzes/course/${courseId}/grand`,
+          );
+          if (grandRes.data) setGrandQuiz(grandRes.data);
+        } catch (e) {
+          console.log("No Grand Quiz found");
+        }
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      } finally {
+        setLoading(false);
+      }
     };
 
     fetchCourseAndQuizzes();
   }, [courseId]);
 
-
   // --- HANDLERS ---
   const handleVideoPress = (guid: string) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setCurrentVideoGuid(guid);
   };
 
-  // --- NAVIGATE TO EXAM SCREEN ---
-  const handleTakeQuiz = (quizData: any) => {
-      router.push({ 
-          pathname: "/(student)/ExamScreen", 
-          params: { 
-              quizId: quizData.quizId,
-              quizType: quizData.quizType,
-              quizData: JSON.stringify(quizData) 
-          } 
-      });
+  const closePlayer = () => {
+    setCurrentVideoGuid(null);
+    if (Platform.OS === "android") {
+      StatusBar.setHidden(false);
+      ScreenOrientation.lockAsync(
+        ScreenOrientation.OrientationLock.PORTRAIT_UP,
+      );
+    }
   };
 
-  // --- FULL SCREEN HANDLERS FOR ANDROID ---
+  const handleTakeQuiz = (quizData: any) => {
+    router.push({
+      pathname: "/(student)/ExamScreen",
+      params: {
+        quizId: quizData.quizId,
+        quizType: quizData.quizType,
+        quizData: JSON.stringify(quizData),
+      },
+    });
+  };
+
   const handleFullScreenOpen = async () => {
-    if (Platform.OS === 'android') {
+    if (Platform.OS === "android") {
       StatusBar.setHidden(true);
-      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+      await ScreenOrientation.lockAsync(
+        ScreenOrientation.OrientationLock.LANDSCAPE,
+      );
     }
   };
 
   const handleFullScreenClose = async () => {
-    if (Platform.OS === 'android') {
+    if (Platform.OS === "android") {
       StatusBar.setHidden(false);
-      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+      await ScreenOrientation.lockAsync(
+        ScreenOrientation.OrientationLock.PORTRAIT_UP,
+      );
     }
   };
 
-  // --- RENDER HELPERS ---
-  // Note: Backend response doesn't provide duration per video in the sample. 
-  // We keep the helper but safely handle missing length.
   const formatDuration = (seconds?: number) => {
-    if (!seconds) return ""; 
+    if (!seconds) return "";
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
   };
 
-  // --- PLAYER COMPONENT ---
-  const renderPlayer = () => {
-    if (!currentVideoGuid) return null;
-
-    // Find the current lecture object to get the correct library ID
-    const currentLecture = videos.find(v => v.videoGuid === currentVideoGuid);
-    // Fallback to the ID from params if not found in object (safety check)
-    const libId = currentLecture?.videoLibraryId || id; 
-
-    // Construct BunnyCDN Embed URL
-    const embedUrl = `https://iframe.mediadelivery.net/embed/${libId}/${currentVideoGuid}?autoplay=true`;
-    
-    const currentLectureId = guidToLectureMap[currentVideoGuid];
-    const currentQuiz = currentLectureId ? lectureQuizzes[currentLectureId] : null;
-
+  // --- RENDER PLAYER WITH OVERLAY BUTTONS ---
+  const PlayerSection = () => {
     return (
-      <View style={styles.playerWrapper}>
-        <View style={styles.playerContainer}>
-          {Platform.OS === 'web' ? (
-            <iframe
-              src={embedUrl}
-              style={{ width: '100%', height: '100%', border: 'none' }}
-              allow="autoplay; fullscreen; picture-in-picture"
-              allowFullScreen
-            />
-          ) : (
-            <WebView
-              key={currentVideoGuid}
-              source={{ uri: embedUrl }}
-              javaScriptEnabled={true}
-              domStorageEnabled={true}
-              allowsFullscreenVideo={true}
-              style={{ flex: 1, backgroundColor: '#000' }}
-              onFullScreenOpen={handleFullScreenOpen} 
-              onFullScreenClose={handleFullScreenClose} 
-            />
-          )}
-        </View>
-        
-        {/* --- LECTURE QUIZ BUTTON --- */}
-        {currentQuiz && (
-            <TouchableOpacity 
-                style={styles.quizButton}
-                onPress={() => handleTakeQuiz(currentQuiz)}
-            >
-                <LinearGradient colors={['#4f46e5', '#4338ca']} style={styles.gradientBtn} start={{x:0,y:0}} end={{x:1,y:0}}>
-                    <Ionicons name="clipboard-outline" size={20} color="white" />
-                    <Text style={styles.quizBtnText}>Take Lecture Quiz</Text>
-                </LinearGradient>
-            </TouchableOpacity>
-        )}
+      <AnimatePresence>
+        {currentVideoGuid && (
+          <MotiView
+            from={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ type: "timing", duration: 400 }}
+            style={{ width: "100%", zIndex: 100, backgroundColor: "#000" }}
+          >
+            {(() => {
+              const currentLecture = videos.find(
+                (v) => v.videoGuid === currentVideoGuid,
+              );
+              const libId = currentLecture?.videoLibraryId || id;
+              const embedUrl = `https://iframe.mediadelivery.net/embed/${libId}/${currentVideoGuid}?autoplay=true`;
+              const currentLectureId = guidToLectureMap[currentVideoGuid!];
+              const currentQuiz = currentLectureId
+                ? lectureQuizzes[currentLectureId]
+                : null;
 
-        <TouchableOpacity 
-            style={styles.closeButton} 
-            onPress={() => {
-                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                setCurrentVideoGuid(null);
-                if (Platform.OS === 'android') {
-                    StatusBar.setHidden(false);
-                    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
-                }
-            }}
-        >
-            <Text style={styles.closeText}>Close Player ✕</Text>
-        </TouchableOpacity>
-      </View>
+              return (
+                <Box w="100%" h={240} bg="black" position="relative">
+                  {/* Video WebView */}
+                  {Platform.OS === "web" ? (
+                    <iframe
+                      src={embedUrl}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        border: "none",
+                      }}
+                      allow="autoplay; fullscreen; picture-in-picture"
+                      allowFullScreen
+                    />
+                  ) : (
+                    <WebView
+                      source={{ uri: embedUrl }}
+                      javaScriptEnabled={true}
+                      domStorageEnabled={true}
+                      allowsFullscreenVideo={true}
+                      style={{ flex: 1, backgroundColor: "#000" }}
+                      onFullScreenOpen={handleFullScreenOpen}
+                      onFullScreenClose={handleFullScreenClose}
+                    />
+                  )}
+
+                  {/* OVERLAY CONTROLS */}
+
+                  {/* Close Button (Top Right) */}
+                  <IconButton
+                    icon={
+                      <Icon
+                        as={Ionicons}
+                        name="close"
+                        size="sm"
+                        color="white"
+                      />
+                    }
+                    onPress={closePlayer}
+                    position="absolute"
+                    top={2}
+                    right={2}
+                    rounded="full"
+                    bg="black:alpha.50"
+                    _pressed={{ bg: "black:alpha.70" }}
+                    zIndex={10}
+                    shadow={2}
+                    size="sm"
+                  />
+
+                  {/* Take Quiz Button (Top Left) - Only if Quiz Exists */}
+                  {currentQuiz && (
+                    <MotiView
+                      from={{ opacity: 0, translateX: -20 }}
+                      animate={{ opacity: 1, translateX: 0 }}
+                      transition={{ delay: 1000, type: "spring" }}
+                      style={{
+                        position: "absolute",
+                        top: 10,
+                        left: 10,
+                        zIndex: 10,
+                      }}
+                    >
+                      <Button
+                        onPress={() => handleTakeQuiz(currentQuiz)}
+                        leftIcon={
+                          <Icon
+                            as={Ionicons}
+                            name="school"
+                            size="xs"
+                            color="white"
+                          />
+                        }
+                        bg="indigo.600"
+                        _pressed={{ bg: "indigo.700" }}
+                        size="xs"
+                        rounded="full"
+                        shadow={3}
+                        opacity={0.9}
+                        _text={{ fontWeight: "bold" }}
+                      >
+                        Take Quiz
+                      </Button>
+                    </MotiView>
+                  )}
+                </Box>
+              );
+            })()}
+          </MotiView>
+        )}
+      </AnimatePresence>
     );
   };
 
-  // --- GRAND TEST FOOTER ---
-  const renderFooter = () => {
-      if (!grandQuiz) return <View style={{ height: 40 }} />;
+  // --- DECORATIVE ABSTRACT SHAPES COMPONENT ---
+  const AbstractShape = ({ theme }: { theme: any }) => {
+    return (
+      <Box position="absolute" right={-20} top={-20} opacity={0.15}>
+        <ZStack alignItems="center" justifyContent="center">
+          {/* Big Circle/Shape */}
+          <Box
+            w={40}
+            h={40}
+            rounded={theme.shape === "circle" ? "full" : "xl"}
+            bg="white"
+            style={{ transform: [{ rotate: "15deg" }] }}
+          />
+          {/* Secondary Icon */}
+          <Icon
+            as={Ionicons}
+            name={theme.secondaryIcon}
+            size="9xl"
+            color="white"
+            position="absolute"
+            opacity={0.4}
+          />
+        </ZStack>
+      </Box>
+    );
+  };
 
-      return (
-          <View style={{ padding: 20, paddingBottom: 40 }}>
-              <TouchableOpacity 
-                style={styles.grandTestCard}
-                onPress={() => handleTakeQuiz(grandQuiz)}
-              >
-                  <LinearGradient 
-                    colors={['#10b981', '#059669']} 
-                    style={styles.grandGradient}
-                    start={{x:0, y:0}} end={{x:1, y:1}}
+  // --- RENDER LIST ITEM (SMOOTH ANIMATION - NO BOUNCE) ---
+  const renderItem = ({
+    item,
+    index,
+  }: {
+    item: LectureItem;
+    index: number;
+  }) => {
+    const lecId = guidToLectureMap[item.videoGuid];
+    const hasQuiz = lecId && lectureQuizzes[lecId];
+    const isPlaying = currentVideoGuid === item.videoGuid;
+
+    // Select Theme based on Index
+    const theme = CARD_THEMES[index % CARD_THEMES.length];
+
+    if (isPlaying) return null;
+
+    return (
+      <MotiView
+        from={{ opacity: 0, translateY: 30 }} // Start slightly below
+        animate={{ opacity: 1, translateY: 0 }} // Smooth slide up
+        transition={{
+          delay: index * 100,
+          type: "timing", // Using timing instead of spring for no bounce
+          duration: 500, // Smooth duration
+        }}
+        style={{ marginBottom: 16, marginHorizontal: 16 }}
+      >
+        <Pressable onPress={() => handleVideoPress(item.videoGuid)}>
+          {({ isPressed }) => (
+            <Box
+              bg="white"
+              rounded="2xl"
+              shadow={isPressed ? 1 : 4}
+              overflow="hidden"
+              borderColor="coolGray.100"
+              borderWidth={1}
+              style={{
+                transform: [{ scale: isPressed ? 0.98 : 1 }],
+              }}
+            >
+              <HStack h={32}>
+                {/* Left Side: Visual/Diagram Area */}
+                <Box w="30%">
+                  <LinearGradient
+                    colors={theme.colors as any}
+                    style={{
+                      flex: 1,
+                      justifyContent: "center",
+                      alignItems: "center",
+                    }}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
                   >
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 10, borderRadius: 50 }}>
-                              <Ionicons name="trophy" size={24} color="white" />
-                          </View>
-                          <View style={{ marginLeft: 15 }}>
-                              <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>Grand Test</Text>
-                              <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12 }}>Test your full course knowledge</Text>
-                          </View>
-                      </View>
-                      <Ionicons name="arrow-forward" size={24} color="white" />
+                    <AbstractShape theme={theme} />
+                    <Icon
+                      as={Ionicons}
+                      name={theme.icon}
+                      color="white"
+                      size="4xl"
+                      zIndex={2}
+                      shadow={2}
+                    />
+                    <Text
+                      color="white"
+                      fontWeight="bold"
+                      fontSize="4xl"
+                      position="absolute"
+                      bottom={-10}
+                      right={-5}
+                      opacity={0.2}
+                    >
+                      {index + 1}
+                    </Text>
                   </LinearGradient>
-              </TouchableOpacity>
-          </View>
-      );
+                </Box>
+
+                {/* Right Side: Content */}
+                <VStack flex={1} p={4} justifyContent="space-between">
+                  <VStack space={1}>
+                    <HStack
+                      justifyContent="space-between"
+                      alignItems="flex-start"
+                    >
+                      <Heading
+                        size="sm"
+                        color="coolGray.800"
+                        numberOfLines={2}
+                        flex={1}
+                        fontFamily="heading"
+                      >
+                        {item.title
+                          ? item.title.replace(".mp4", "").replace(/_/g, " ")
+                          : "Untitled Lecture"}
+                      </Heading>
+                      {item.length && (
+                        <Badge
+                          bg="coolGray.100"
+                          rounded="md"
+                          _text={{
+                            color: "coolGray.500",
+                            fontWeight: "bold",
+                            fontSize: "xs",
+                          }}
+                        >
+                          {formatDuration(item.length)}
+                        </Badge>
+                      )}
+                    </HStack>
+                  </VStack>
+
+                  <HStack
+                    justifyContent="space-between"
+                    alignItems="center"
+                    mt={2}
+                  >
+                    <HStack space={2}>
+                      {/* Dynamic Tags */}
+                      <HStack space={1} alignItems="center">
+                        <Icon
+                          as={Ionicons}
+                          name="time-outline"
+                          size="xs"
+                          color="coolGray.400"
+                        />
+                        <Text fontSize="xs" color="coolGray.400">
+                          Lecture
+                        </Text>
+                      </HStack>
+                    </HStack>
+
+                    {hasQuiz ? (
+                      <Badge
+                        colorScheme="success"
+                        variant="solid"
+                        rounded="full"
+                        startIcon={
+                          <Icon as={Ionicons} name="checkbox" size="xs" />
+                        }
+                      >
+                        Quiz Ready
+                      </Badge>
+                    ) : (
+                      <Icon
+                        as={Ionicons}
+                        name="play-circle"
+                        color={theme.colors[0]}
+                        size="md"
+                        opacity={0.5}
+                      />
+                    )}
+                  </HStack>
+                </VStack>
+              </HStack>
+            </Box>
+          )}
+        </Pressable>
+      </MotiView>
+    );
+  };
+
+  // --- GRAND TEST CARD (BOSS LEVEL) ---
+  const GrandTestCard = () => {
+    if (!grandQuiz) return <Box h={20} />;
+
+    return (
+      <MotiView
+        from={{ opacity: 0, translateY: 50 }}
+        animate={{ opacity: 1, translateY: 0 }}
+        transition={{ delay: 600, type: "timing", duration: 700 }}
+      >
+        <Box px={4} pb={12} pt={4}>
+          <Pressable onPress={() => handleTakeQuiz(grandQuiz)}>
+            {({ isPressed }) => (
+              <Box style={{ transform: [{ scale: isPressed ? 0.98 : 1 }] }}>
+                <LinearGradient
+                  colors={["#FFD700", "#F59E0B"]} // Gold Gradient
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{
+                    borderRadius: 20,
+                    padding: 2, // Border effect
+                  }}
+                >
+                  <Box bg="white" rounded="xl" overflow="hidden">
+                    <HStack>
+                      {/* Left Gold Bar */}
+                      <LinearGradient
+                        colors={["#F59E0B", "#D97706"]}
+                        style={{
+                          width: 80,
+                          justifyContent: "center",
+                          alignItems: "center",
+                        }}
+                      >
+                        <Icon
+                          as={Ionicons}
+                          name="trophy"
+                          color="white"
+                          size="3xl"
+                        />
+                      </LinearGradient>
+
+                      <VStack p={4} flex={1} space={1}>
+                        <Heading size="md" color="warmGray.800">
+                          Grand Challenge
+                        </Heading>
+                        <Text fontSize="xs" color="coolGray.500">
+                          Prove your mastery of this course.
+                        </Text>
+                        <HStack mt={2} alignItems="center" space={2}>
+                          <Text
+                            color="amber.600"
+                            fontWeight="bold"
+                            fontSize="sm"
+                          >
+                            Start Assessment
+                          </Text>
+                          <Icon
+                            as={Ionicons}
+                            name="arrow-forward"
+                            size="sm"
+                            color="amber.600"
+                          />
+                        </HStack>
+                      </VStack>
+                    </HStack>
+                  </Box>
+                </LinearGradient>
+              </Box>
+            )}
+          </Pressable>
+        </Box>
+      </MotiView>
+    );
   };
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#4f46e5" />
-        <Text style={{ marginTop: 10, color: '#6366f1' }}>Loading Content...</Text>
-      </View>
+      <Center flex={1} bg="white">
+        <MotiView
+          from={{ opacity: 0.5, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ loop: true, type: "timing", duration: 1000 }}
+        >
+          <Spinner size="lg" color="indigo.600" />
+        </MotiView>
+        <Text
+          mt={4}
+          color="coolGray.400"
+          fontWeight="medium"
+          letterSpacing="lg"
+        >
+          LOADING CONTENT...
+        </Text>
+      </Center>
     );
   }
 
-  return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f8fafc" />
-      
-      {renderPlayer()}
+  const displayedVideos = currentVideoGuid
+    ? videos.filter((v) => v.videoGuid !== currentVideoGuid)
+    : videos;
 
+  return (
+    <Box flex={1} bg="coolGray.50" safeAreaTop>
+      <StatusBar barStyle="dark-content" backgroundColor="#f9fafb" />
+
+      {/* HEADER (Only shows when video is NOT playing) */}
       {!currentVideoGuid && (
-        <View style={styles.header}>
-            <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 10 }}>
-                <Ionicons name="arrow-back" size={24} color="#0f172a" />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Course Content</Text>
-        </View>
+        <MotiView
+          from={{ opacity: 0, translateY: -20 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={{ type: "timing", duration: 500 }}
+        >
+          <HStack alignItems="center" px={4} py={4} bg="coolGray.50" space={3}>
+            <IconButton
+              icon={
+                <Icon
+                  as={Ionicons}
+                  name="chevron-back"
+                  size="md"
+                  color="black"
+                />
+              }
+              onPress={() => router.back()}
+              rounded="full"
+              variant="ghost"
+              bg="white"
+              shadow={1}
+            />
+            <VStack>
+              <Heading size="md" color="coolGray.800">
+                Course Content
+              </Heading>
+              <Text fontSize="xs" color="coolGray.500">
+                {videos.length} Lectures Available
+              </Text>
+            </VStack>
+          </HStack>
+        </MotiView>
       )}
 
+      {/* PLAYER SECTION */}
+      <PlayerSection />
+
+      {/* VIDEO LIST */}
       <Animated.FlatList
-        data={displayedVideos} 
+        data={displayedVideos}
         keyExtractor={(item) => item.videoGuid}
-        contentContainerStyle={styles.listContent}
+        renderItem={renderItem}
+        ListFooterComponent={GrandTestCard}
+        contentContainerStyle={{ paddingTop: 10, paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
-        ListFooterComponent={renderFooter}
-        onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { useNativeDriver: true }
-        )}
-        renderItem={({ item, index }) => {
-          const inputRange = [ -1, 0, (100 * index), (100 * (index + 2)) ]; 
-          const opacity = scrollY.interpolate({
-             inputRange,
-             outputRange: [1, 1, 1, 0.8]
-          });
-
-          // Map using videoGuid now
-          const lecId = guidToLectureMap[item.videoGuid];
-          const hasQuiz = lecId && lectureQuizzes[lecId];
-
-          return (
-            <Animated.View style={{ opacity }}>
-                <TouchableOpacity 
-                  activeOpacity={0.7}
-                  onPress={() => handleVideoPress(item.videoGuid)}
-                  style={styles.card}
-                >
-                  <View style={styles.thumbnailContainer}>
-                      <Image 
-                        source={{ uri: item.thumbnailUrl || "https://img.freepik.com/free-vector/gradient-ui-ux-background_23-2149052117.jpg" }} 
-                        style={styles.thumbnailImage}
-                        resizeMode="cover"
-                      />
-                      <View style={styles.playIconOverlay}>
-                        <Ionicons name="play-circle" size={28} color="rgba(255,255,255,0.9)" />
-                      </View>
-                      {item.length ? (
-                          <View style={styles.durationBadge}>
-                            <Text style={styles.durationText}>{formatDuration(item.length)}</Text>
-                          </View>
-                      ) : null}
-                  </View>
-
-                  <View style={styles.cardContent}>
-                    <View style={styles.textContainer}>
-                        <Text style={styles.videoTitle} numberOfLines={2}>
-                          {item.title ? item.title.replace('.mp4', '').replace(/_/g, ' ') : 'Untitled Lecture'}
-                        </Text>
-                        
-                        <View style={styles.metaRow}>
-                           {/* Backend doesn't send views/date yet, so we just show generic 'Lecture' text or nothing */}
-                            <Text style={styles.metaText}>Lecture {index + 1}</Text>
-                        </View>
-                        
-                        {hasQuiz && (
-                            <View style={styles.quizBadge}>
-                                <Ionicons name="clipboard" size={10} color="#4f46e5" />
-                                <Text style={styles.quizBadgeText}>Quiz Available</Text>
-                            </View>
-                        )}
-                    </View>
-                  </View>
-                </TouchableOpacity>
-            </Animated.View>
-          );
-        }}
+        onScroll={scrollHandler}
+        scrollEventThrottle={16}
         ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-                <Ionicons name="film-outline" size={60} color="#cbd5e1" />
-                <Text style={styles.emptyText}>No lectures available.</Text>
-            </View>
+          <Center mt={20}>
+            <MotiView
+              from={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 300, type: "timing" }}
+            >
+              <Icon
+                as={Ionicons}
+                name="library-outline"
+                size="6xl"
+                color="coolGray.200"
+              />
+              <Text color="coolGray.400" mt={4} fontWeight="bold">
+                No lectures found.
+              </Text>
+            </MotiView>
+          </Center>
         }
       />
-    </SafeAreaView>
+    </Box>
   );
 };
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f1f5f9', backgroundColor: '#fff' },
-  headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#0f172a' },
-  playerWrapper: { backgroundColor: '#000', elevation: 4, zIndex: 50 },
-  playerContainer: { width: '100%', aspectRatio: 16 / 9, backgroundColor: '#000' },
-  closeButton: { paddingVertical: 10, alignItems: 'center', backgroundColor: '#1e293b' },
-  closeText: { color: '#fff', fontSize: 12, fontWeight: '600' },
-  listContent: { paddingVertical: 10 },
-  card: { flexDirection: 'row', backgroundColor: '#fff', marginBottom: 12, paddingHorizontal: 16, alignItems: 'center' },
-  thumbnailContainer: { width: 130, height: 74, borderRadius: 8, position: 'relative', backgroundColor: '#f1f5f9', overflow: 'hidden' },
-  thumbnailImage: { width: '100%', height: '100%' },
-  playIconOverlay: { position: 'absolute', inset: 0, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.1)' },
-  durationBadge: { position: 'absolute', bottom: 4, right: 4, backgroundColor: 'rgba(0, 0, 0, 0.75)', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 3 },
-  durationText: { color: '#fff', fontSize: 10, fontWeight: '600' },
-  cardContent: { flex: 1, marginLeft: 12, justifyContent: 'center', paddingVertical: 4 },
-  textContainer: { flex: 1 },
-  videoTitle: { fontSize: 14, fontWeight: '600', color: '#0f172a', lineHeight: 18, marginBottom: 4 },
-  metaRow: { flexDirection: 'row', alignItems: 'center' },
-  metaText: { fontSize: 11, color: '#64748b' },
-  emptyContainer: { alignItems: 'center', marginTop: 80 },
-  emptyText: { marginTop: 12, color: '#94a3b8', fontSize: 14 },
-  quizButton: {
-      marginHorizontal: 10,
-      marginBottom: 10,
-      marginTop: -5,
-      borderRadius: 8,
-      overflow: 'hidden',
-      elevation: 3
-  },
-  gradientBtn: {
-      flexDirection: 'row',
-      justifyContent: 'center',
-      alignItems: 'center',
-      paddingVertical: 12
-  },
-  quizBtnText: {
-      color: 'white',
-      fontWeight: 'bold',
-      marginLeft: 8
-  },
-  grandTestCard: {
-      borderRadius: 16,
-      overflow: 'hidden',
-      elevation: 5,
-      shadowColor: '#10b981',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.2,
-      shadowRadius: 8
-  },
-  grandGradient: {
-      padding: 20,
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center'
-  },
-  quizBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: '#e0e7ff',
-      paddingHorizontal: 6,
-      paddingVertical: 2,
-      borderRadius: 4,
-      alignSelf: 'flex-start',
-      marginTop: 4
-  },
-  quizBadgeText: {
-      fontSize: 9,
-      color: '#4338ca',
-      fontWeight: 'bold',
-      marginLeft: 3
-  }
-});
 
 export default VideoListByLibrary;

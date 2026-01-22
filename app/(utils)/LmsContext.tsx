@@ -1,8 +1,14 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter, useSegments } from 'expo-router';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useRouter, useSegments } from "expo-router";
 import { jwtDecode } from "jwt-decode";
-import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
-import api from './api';
+import React, {
+  createContext,
+  ReactNode,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
+import api from "./api";
 
 interface User {
   accessToken: string;
@@ -13,13 +19,17 @@ interface User {
 interface AuthResponse {
   success: boolean;
   message?: string;
-  errorType?: 'CONFLICT' | 'GENERAL'; 
+  errorType?: "CONFLICT" | "GENERAL";
 }
 
 interface LmsContextType {
   user: User | null;
   isLoading: boolean;
-  login: (email: string, pass: string, forceLogin?: boolean) => Promise<AuthResponse>;
+  login: (
+    email: string,
+    pass: string,
+    forceLogin?: boolean,
+  ) => Promise<AuthResponse>;
   register: (userData: any) => Promise<AuthResponse>;
   logout: () => Promise<void>; // Updated return type to Promise<void>
 }
@@ -28,7 +38,7 @@ const Context = createContext<LmsContextType | undefined>(undefined);
 
 export const useLms = () => {
   const context = useContext(Context);
-  if (!context) throw new Error('useLms must be used within LmsContext');
+  if (!context) throw new Error("useLms must be used within LmsContext");
   return context;
 };
 
@@ -42,20 +52,20 @@ const LmsContext = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const loadUser = async () => {
       try {
-        const token = await AsyncStorage.getItem('accessToken');
-        const role = await AsyncStorage.getItem('userRole');
-        
+        const token = await AsyncStorage.getItem("accessToken");
+        const role = await AsyncStorage.getItem("userRole");
+
         if (token && role) {
-          api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+          api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
           setUser({ accessToken: token, role: role });
-          
+
           const decoded: any = jwtDecode(token);
           if (decoded.isFirstLogin === true) {
-             router.replace('/(auth)/ChangePassword');
-             return;
+            router.replace("/(auth)/ChangePassword");
+            return;
           }
 
-          const inAuthGroup = segments[0] === '(auth)' || segments.length === 0;
+          const inAuthGroup = segments[0] === "(auth)" || segments.length === 0;
           if (inAuthGroup) redirectBasedOnRole(role);
         }
       } catch (e) {
@@ -66,64 +76,75 @@ const LmsContext = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const redirectBasedOnRole = (role: string) => {
-    const normalizedRole = role ? role.toUpperCase() : '';
-    if (normalizedRole.includes('ADMIN')) {
-      router.replace('/(admin)/Dashboard');
+    const normalizedRole = role ? role.toUpperCase() : "";
+    if (normalizedRole.includes("ADMIN")) {
+      router.replace("/(admin)/Dashboard");
     } else {
-      router.replace('/(student)/Home');
+      router.replace("/(student)/Home");
     }
   };
 
   // --- 2. LOGIN FUNCTION WITH FORCE FLAG ---
-  const login = async (email: string, pass: string, forceLogin = false): Promise<AuthResponse> => {
+  const login = async (
+    email: string,
+    pass: string,
+    forceLogin = false,
+  ): Promise<AuthResponse> => {
     setIsLoading(true);
     try {
       // Send force flag to backend
-      const res = await api.post('/api/auth/login', { 
-        email, 
+      const res = await api.post("/api/auth/login", {
+        email,
         password: pass,
-        force: forceLogin 
+        force: forceLogin,
       });
-      
-      const { accessToken, isFirstLogin } = res.data; 
-      
+
+      const { accessToken, isFirstLogin } = res.data;
+
       const decoded: any = jwtDecode(accessToken);
-      let userRole = 'STUDENT';
-      
-      if (decoded.roles && Array.isArray(decoded.roles) && decoded.roles.length > 0) {
-        userRole = decoded.roles[0]; 
+      let userRole = "STUDENT";
+
+      if (
+        decoded.roles &&
+        Array.isArray(decoded.roles) &&
+        decoded.roles.length > 0
+      ) {
+        userRole = decoded.roles[0];
       } else if (decoded.authorities && Array.isArray(decoded.authorities)) {
         userRole = decoded.authorities[0];
       }
 
-      await AsyncStorage.setItem('accessToken', accessToken);
-      await AsyncStorage.setItem('userRole', userRole);
+      await AsyncStorage.setItem("accessToken", accessToken);
+      await AsyncStorage.setItem("userRole", userRole);
 
-      api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
+      api.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
       setUser({ accessToken, email, role: userRole });
-      
-      if (isFirstLogin === true) {
-         router.replace('/(auth)/ChangePassword');
-      } else {
-         redirectBasedOnRole(userRole);
-      }
-      
-      return { success: true };
 
+      if (isFirstLogin === true) {
+        router.replace("/(auth)/ChangePassword");
+      } else {
+        redirectBasedOnRole(userRole);
+      }
+
+      return { success: true };
     } catch (error: any) {
       console.error("Login Error:", error);
-      
+
       // Check specifically for CONFLICT (409)
-      if (error.response?.status === 409 || error.response?.data?.code === 'ALREADY_LOGGED_IN') {
-          return { 
-            success: false, 
-            errorType: 'CONFLICT', 
-            message: 'User already logged in on another device.' 
-          };
+      if (
+        error.response?.status === 409 ||
+        error.response?.data?.code === "ALREADY_LOGGED_IN"
+      ) {
+        return {
+          success: false,
+          errorType: "CONFLICT",
+          message: "User already logged in on another device.",
+        };
       }
 
-      let msg = error.response?.data?.message || 'Invalid Credentials or Server Error';
-      return { success: false, errorType: 'GENERAL', message: msg };
+      let msg =
+        error.response?.data?.message || "Invalid Credentials or Server Error";
+      return { success: false, errorType: "GENERAL", message: msg };
     } finally {
       setIsLoading(false);
     }
@@ -144,17 +165,20 @@ const LmsContext = ({ children }: { children: ReactNode }) => {
         passoutYear: parseInt(userData.passoutYear),
       };
 
-      await api.post('/api/auth/register', payload);
-      return { success: true, message: 'Registration Successful! Please Login.' };
-      
+      await api.post("/api/auth/register", payload);
+      return {
+        success: true,
+        message: "Registration Successful! Please Login.",
+      };
     } catch (error: any) {
       console.log("Register Error:", error.response?.data);
       const errorData = error.response?.data;
-      let msg = 'Registration Failed';
-      
-      if (typeof errorData === 'string') msg = errorData;
+      let msg = "Registration Failed";
+
+      if (typeof errorData === "string") msg = errorData;
       else if (errorData?.message) msg = errorData.message;
-      else if (typeof errorData === 'object') msg = Object.values(errorData).join('\n');
+      else if (typeof errorData === "object")
+        msg = Object.values(errorData).join("\n");
 
       return { success: false, message: msg };
     } finally {
@@ -167,21 +191,21 @@ const LmsContext = ({ children }: { children: ReactNode }) => {
     try {
       // 1. Call Backend Logout API FIRST (Token is still valid in headers)
       console.log("Logging out from backend...");
-      await api.post('/api/auth/logout'); 
+      await api.post("/api/auth/logout");
     } catch (e) {
       console.log("Logout API call failed or network error", e);
     } finally {
       // 2. Clear Local Data ALWAYS (even if API fails)
       console.log("Clearing local session...");
-      await AsyncStorage.removeItem('accessToken');
-      await AsyncStorage.removeItem('userRole');
-      
+      await AsyncStorage.removeItem("accessToken");
+      await AsyncStorage.removeItem("userRole");
+
       // 3. Clear State & Headers
       setUser(null);
-      delete api.defaults.headers.common['Authorization'];
-      
+      delete api.defaults.headers.common["Authorization"];
+
       // 4. Redirect to Login
-      router.replace('/');
+      router.replace("/");
     }
   };
 
