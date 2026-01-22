@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { jwtDecode } from "jwt-decode";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Image,
   SafeAreaView,
@@ -62,6 +62,7 @@ export default function Dashboard() {
   
   // --- STATE: Controls initial display limit ---
   const [showAllCourses, setShowAllCourses] = useState(false);
+  const [totalActiveStudents, setTotalActiveStudents] = useState<number>(0);
 
   let cardWidth = 0;
   if (isDesktop) {
@@ -153,6 +154,32 @@ export default function Dashboard() {
       .catch(() => setTotalCourses(0));
   }, []);
 
+  const fetchTotalActiveStudents = useCallback(async () => {
+    try {
+      // 1. Get all courses
+      const coursesRes = await CourseApi.get("/api/courses");
+      const courses = coursesRes.data?.data || [];
+
+      // 2. For each course, fetch enrollment stats
+      const statsPromises = courses.map((course: any) =>
+        CourseApi.get(`http://192.168.0.230:8088/api/courses/${course.courseId}/enrollment-stats`)
+          .then(res => res.data?.totalEnrolledStudents || 0)
+          .catch(() => 0)
+      );
+      const stats = await Promise.all(statsPromises);
+
+      // 3. Sum up all students
+      const total = stats.reduce((sum, n) => sum + n, 0);
+      setTotalActiveStudents(total);
+    } catch (err) {
+      setTotalActiveStudents(0);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchTotalActiveStudents();
+  }, [fetchTotalActiveStudents]);
+
   useEffect(() => {
     const fetchBunnyCounts = async () => {
       const counts: { [courseId: string]: number } = {};
@@ -217,13 +244,13 @@ export default function Dashboard() {
             theme="indigo"
             width={cardWidth} 
           />
-          <StatCard 
-            title="Active Students" 
-            value={stats.totalStudents} 
-            icon="people-outline" 
-            theme="rose"
-            width={cardWidth} 
-          />
+        <StatCard 
+          title="Active Students" 
+          value={totalActiveStudents} // <-- Use fetched value here
+          icon="people-outline" 
+          theme="rose"
+          width={cardWidth} 
+        />
           {/* UPDATED: Uses dynamic totalVideos state */}
          <StatCard 
             title="Content Library" 

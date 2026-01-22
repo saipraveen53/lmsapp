@@ -1,11 +1,11 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios, {
   AxiosError,
   AxiosInstance,
   InternalAxiosRequestConfig,
-} from 'axios';
-import { router } from 'expo-router';
-import { Alert, Platform } from 'react-native';
+} from "axios";
+import { router } from "expo-router";
+import { Alert, Platform } from "react-native";
 
 const getToken = async (): Promise<string | null> => {
   try {
@@ -17,39 +17,41 @@ const getToken = async (): Promise<string | null> => {
 };
 
 const handleLogout = async () => {
-  await AsyncStorage.removeItem('accessToken');
-  await AsyncStorage.removeItem('userRole');
-  
+  await AsyncStorage.removeItem("accessToken");
+  await AsyncStorage.removeItem("userRole");
+
   // Platform specific alerts
-  if (Platform.OS === 'web') {
-    alert('Session Expired: You have logged in on another device.');
-    window.location.href = '/'; 
+  if (Platform.OS === "web") {
+    alert("Session Expired: You have logged in on another device.");
+    window.location.href = "/";
   } else {
-    Alert.alert('Session Expired', 'You have logged in on another device.');
-    router.replace('/'); 
+    Alert.alert("Session Expired", "You have logged in on another device.");
+    router.replace("/");
   }
 };
 
 const createAxiosInstance = (baseURL: string): AxiosInstance => {
   const instance: AxiosInstance = axios.create({
     baseURL: baseURL,
-    timeout: 30000, 
+    timeout: 30000,
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
   });
 
   instance.interceptors.request.use(
-    async (config: InternalAxiosRequestConfig): Promise<InternalAxiosRequestConfig> => {
+    async (
+      config: InternalAxiosRequestConfig,
+    ): Promise<InternalAxiosRequestConfig> => {
       const token: string | null = await getToken();
-      
+
       if (token) {
-        const cleanToken = token.replace(/^"|"$/g, '');
+        const cleanToken = token.replace(/^"|"$/g, "");
         config.headers.Authorization = `Bearer ${cleanToken}`;
       }
       return config;
     },
-    (error: AxiosError) => Promise.reject(error)
+    (error: AxiosError) => Promise.reject(error),
   );
 
   instance.interceptors.response.use(
@@ -60,12 +62,18 @@ const createAxiosInstance = (baseURL: string): AxiosInstance => {
         await handleLogout();
       }
       return Promise.reject(error);
-    }
+    },
   );
 
   return instance;
 };
 
-export const rootApi: AxiosInstance = createAxiosInstance("http://192.168.0.220:8080");
-export const CourseApi: AxiosInstance = createAxiosInstance("http://192.168.0.230:8088");
-export const QuizApi: AxiosInstance = createAxiosInstance("http://192.168.0.220:8082");
+export const rootApi: AxiosInstance = createAxiosInstance(
+  "http://192.168.0.200:8080",
+);
+export const CourseApi: AxiosInstance = createAxiosInstance(
+  "http://192.168.0.243:8088",
+);
+export const QuizApi: AxiosInstance = createAxiosInstance(
+  "http://192.168.0.220:8082",
+);
