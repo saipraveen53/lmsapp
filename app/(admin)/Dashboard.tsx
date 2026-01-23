@@ -20,7 +20,7 @@ import Svg, {
   Path,
   Rect,
   Stop,
-  LinearGradient as SvgGradient
+  LinearGradient as SvgGradient,
 } from "react-native-svg";
 import { rootApi } from "../(utils)/axiosInstance";
 // import "../globals.css";
@@ -171,6 +171,7 @@ export default function Dashboard() {
   const [totalCourses, setTotalCourses] = useState<number>(0);
   const [totalVideos, setTotalVideos] = useState<number>(0);
   const [showAllCourses, setShowAllCourses] = useState(false);
+  const [totalActiveStudents, setTotalActiveStudents] = useState<number>(0);
 
   let cardWidth = 0;
   if (isDesktop) {
@@ -216,6 +217,7 @@ export default function Dashboard() {
             isPaid: !c.isFree,
             videos: courseLecturesCount,
             status: c.isPublished ? "active" : "inactive",
+            libraryId: c.libraryId,
           };
         });
         setRecentCourses(courses);

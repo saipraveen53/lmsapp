@@ -25,6 +25,7 @@ interface Student {
   fullName: string;
   email: string;
   collegeName: string;
+  status: string;
   passoutYear: string;
   phoneNumber?: string;
   profileImage?: string;
@@ -35,9 +36,10 @@ export default function Students() {
   const { width } = useWindowDimensions();
   
   // Responsive Check
+  const [viewType, setViewType] = useState<"grid" | "list">("grid"); // 1. Add viewType state
   const isDesktop = width >= 1024;
   const isTablet = width >= 768 && width < 1024;
-  const numColumns = isDesktop ? 3 : isTablet ? 2 : 1;
+  const numColumns = viewType === "grid" ? (isDesktop ? 4 : isTablet ? 2 : 1) : 1;
   const gap = 16;
 
   // State
@@ -50,6 +52,8 @@ export default function Students() {
   
   const [showDropdown, setShowDropdown] = useState(false); 
   const [searchQuery, setSearchQuery] = useState("");
+  const [enrollmentStats, setEnrollmentStats] = useState<any>(null);
+  
 
   // --- 1. FETCH COURSES ON MOUNT ---
   useEffect(() => {
@@ -59,7 +63,7 @@ export default function Students() {
   const fetchCourses = async () => {
     setLoadingCourses(true);
     try {
-      const response = await CourseApi.get("http://192.168.0.116:8088/api/courses");
+      const response = await CourseApi.get("/api/courses");
       const data = response.data?.data || [];
       setCourses(data);
     } catch (error) {
@@ -71,32 +75,43 @@ export default function Students() {
 
   // --- 2. FETCH STUDENTS FOR SELECTED COURSE ---
   const handleSelectCourse = async (course: Course) => {
-    setSelectedCourse(course);
-    setShowDropdown(false); 
-    setLoadingStudents(true);
-    setStudents([]); 
+  setSelectedCourse(course);
+  setShowDropdown(false); 
+  setLoadingStudents(true);
+  setStudents([]); 
+  setEnrollmentStats(null);
 
-    try {
-      const response = await CourseApi.get(`http://192.168.0.116:8088/api/courses/${course.courseId}/students`);
-      setStudents(response.data?.data || []);
-    } catch (error) {
-      console.error("Failed to fetch students", error);
-    } finally {
-      setLoadingStudents(false);
-    }
-  };
+  try {
+    const statsRes = await CourseApi.get(`/api/courses/${course.courseId}/enrollment-stats`);
+    setEnrollmentStats(statsRes.data);
+    setStudents(statsRes.data?.enrolledStudents || []);
+  } catch (error) {
+    console.error("Failed to fetch students", error);
+  } finally {
+    setLoadingStudents(false);
+  }
+};
 
-  const filteredStudents = students.filter(s => 
-    s.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    s.collegeName?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+const filteredStudents = students.filter(s => 
+  s.fullName?.toLowerCase().includes(searchQuery.toLowerCase())
+);
 
   // --- RENDER ITEM: STUDENT CARD ---
   const renderStudentCard = ({ item }: { item: Student }) => (
-    <View 
-      className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 mb-4"
-      style={isDesktop || isTablet ? { flex: 1, margin: gap / 2, minWidth: (width / numColumns) - 40 } : { marginBottom: 16 }}
-    >
+    <View
+    className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 mb-4"
+    style={
+      viewType === "grid"
+        ? (isDesktop
+            ? { flex: 1, margin: gap / 2, minWidth: (width - gap * (numColumns + 1)) / numColumns }
+            : isTablet
+              ? { flex: 1, margin: gap / 2, minWidth: (width - gap * 3) / 2 }
+              : { marginBottom: 16 }
+          )
+        : { marginBottom: 12, width: "100%" }
+    }
+  >
+      {/* ...existing card content... */}
       <View className="flex-row items-center mb-4">
         <View className="w-12 h-12 rounded-full bg-indigo-50 items-center justify-center mr-4 border border-indigo-100">
           <Text className="text-indigo-600 font-bold text-lg">
@@ -112,26 +127,24 @@ export default function Students() {
           </Text>
         </View>
         <View className="bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100">
-           <Text className="text-[10px] font-bold text-emerald-700">
-             {item.passoutYear || "N/A"}
-           </Text>
+          <Text className="text-[10px] font-bold text-emerald-700">
+            {item.status || "N/A"}
+          </Text>
         </View>
       </View>
-
       <View className="border-t border-slate-50 pt-3">
         <View className="flex-row items-center mb-2">
-           <Ionicons name="school-outline" size={14} color="#64748b" />
-           <Text className="text-xs text-slate-600 ml-2 flex-1" numberOfLines={1}>
-             {item.collegeName || "Unknown College"}
-           </Text>
+          <Ionicons name="school-outline" size={14} color="#64748b" />
+          <Text className="text-xs text-slate-600 ml-2 flex-1" numberOfLines={1}>
+            {item.collegeName || "Unknown College"}
+          </Text>
         </View>
-        
         {item.phoneNumber && (
           <View className="flex-row items-center">
-             <Ionicons name="call-outline" size={14} color="#64748b" />
-             <Text className="text-xs text-slate-600 ml-2">
-               {item.phoneNumber}
-             </Text>
+            <Ionicons name="call-outline" size={14} color="#64748b" />
+            <Text className="text-xs text-slate-600 ml-2">
+              {item.phoneNumber}
+            </Text>
           </View>
         )}
       </View>
@@ -143,11 +156,34 @@ export default function Students() {
       
       {/* --- HEADER --- */}
         <View className="flex-row justify-between items-center mb-4 pt-5 px-4">
-            <View>
-                <Text className="text-black text-3xl font-extrabold">Registered Students</Text>
-                <Text className="text-indigo-300 text-sm font-medium opacity-90">Manage enrollments & details</Text>
-            </View>
+        <View>
+          <Text className="text-black text-3xl font-extrabold">Registered Students</Text>
+          <Text className="text-indigo-300 text-sm font-medium opacity-90">Manage enrollments & details</Text>
         </View>
+        {/* 2. Add grid/list toggle icons */}
+        <View className="flex-row space-x-2">
+          <TouchableOpacity
+            onPress={() => setViewType("grid")}
+            className={`p-2 rounded-full ${viewType === "grid" ? "bg-indigo-100" : "bg-slate-100"}`}
+          >
+            <Ionicons name="grid-outline" size={22} color={viewType === "grid" ? "#4f46e5" : "#64748b"} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setViewType("list")}
+            className={`p-2 rounded-full ${viewType === "list" ? "bg-indigo-100" : "bg-slate-100"}`}
+          >
+            <Ionicons name="list-outline" size={22} color={viewType === "list" ? "#4f46e5" : "#64748b"} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+        {enrollmentStats && (
+          <View className="px-4 mb-2">
+            <Text className="text-indigo-700 font-bold">
+              Total Enrolled: {enrollmentStats.totalEnrolledStudents}
+            </Text>
+          </View>
+        )}
 
         {/* --- COURSE SELECTOR BUTTON --- */}
         <View className="z-50"> 
@@ -314,12 +350,12 @@ export default function Students() {
              <FlatList
                 data={filteredStudents}
                 keyExtractor={(item) => item.studentId || item.email}
-                key={numColumns} 
+                key={viewType + numColumns}
                 numColumns={numColumns}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 100 }}
                 renderItem={renderStudentCard}
-             />
+              />
         )}
       </View>
 

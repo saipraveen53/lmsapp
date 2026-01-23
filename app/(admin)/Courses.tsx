@@ -30,7 +30,7 @@ import Svg, {
   Path,
   Rect,
   Stop,
-  LinearGradient as SvgGradient
+  LinearGradient as SvgGradient,
 } from "react-native-svg";
 import { WebView } from "react-native-webview";
 import { CourseApi } from "../(utils)/axiosInstance";
@@ -558,6 +558,7 @@ export default function Courses() {
     setSelectedCourseTitle(course.title);
     setForm(INITIAL_FORM_STATE);
     setErrors({});
+    setBunnyVideos([]); // Clear previous videos
     setModalVisible(true);
   };
 
@@ -571,6 +572,81 @@ export default function Courses() {
     if (errors[key]) setErrors((prev) => ({ ...prev, [key]: undefined }));
   };
 
+  // --- BUNNY API FETCH ---
+  const fetchBunnyVideos = async () => {
+    if (!form.videoLibraryId) {
+      Alert.alert("Required", "Please enter a Library ID first.");
+      return;
+    }
+
+    setLoadingVideos(true);
+    try {
+      const url = `https://video.bunnycdn.com/library/${form.videoLibraryId}/videos?page=1&itemsPerPage=100`;
+      const response = await axios.get(url, {
+        headers: {
+          AccessKey: "eb8560ce-e8a6-414c-8e250605c6d5-627d-4c55",
+          Accept: "application/json",
+        },
+      });
+
+      if (response.status === 200 && response.data.items) {
+        setBunnyVideos(response.data.items);
+        if (response.data.items.length > 0) {
+          setVideoModalVisible(true);
+        } else {
+          Alert.alert("No Videos", "No videos found in this library.");
+        }
+      }
+    } catch (error: any) {
+      console.error("Bunny API Error:", error);
+      Alert.alert(
+        "Error",
+        "Failed to fetch videos. Check Library ID or Network.",
+      );
+    } finally {
+      setLoadingVideos(false);
+    }
+  };
+
+  const selectBunnyVideo = (video: any) => {
+    // Auto-fill fields from selected video
+    setForm((prev) => ({
+      ...prev,
+      title: video.title ? video.title.replace(".mp4", "") : prev.title,
+      videoGuid: video.guid,
+      durationSeconds: video.length ? String(video.length) : "0",
+    }));
+    setVideoModalVisible(false);
+  };
+
+  useEffect(() => {
+    const fetchAllBunnyCounts = async () => {
+      const counts: { [libraryId: string]: number } = {};
+      await Promise.all(
+        courses
+          .filter((c) => c.libraryId)
+          .map(async (c) => {
+            try {
+              const url = `https://video.bunnycdn.com/library/${c.libraryId}/videos?page=1&itemsPerPage=1`;
+              const res = await axios.get(url, {
+                headers: {
+                  AccessKey: "eb8560ce-e8a6-414c-8e250605c6d5-627d-4c55",
+                  Accept: "application/json",
+                },
+              });
+              counts[c.libraryId] = res.data.totalItems || 0;
+            } catch {
+              counts[c.libraryId] = 0;
+            }
+          }),
+      );
+      setBunnyVideoCounts(counts);
+    };
+
+    if (courses.length > 0) {
+      fetchAllBunnyCounts();
+    }
+  }, [courses]);
   const validate = () => {
     const newErrors: any = {};
     if (!form.title.trim()) newErrors.title = "Required";

@@ -26,7 +26,7 @@ export default function LoginScreen() {
   }
 }
 
-// ---------------- MOBILE LOGIN (Uses Alerts) ----------------
+// ---------------- MOBILE LOGIN ----------------
 const MobileLogin = () => {
   const { login, isLoading } = useLms();
   const router = useRouter();
@@ -38,11 +38,32 @@ const MobileLogin = () => {
   const handleLogin = async () => {
     if (!email || !password) return Alert.alert("Error", "Please fill all fields");
     
-    const result = await login(email, password);
+    // 1. First Attempt (force = false)
+    const result = await login(email, password, false);
+    
     if (!result.success) {
-      Alert.alert("Login Failed", result.message || "Unknown Error");
-    } else {
-      Alert.alert("Success", "Login Successful!");
+      if (result.errorType === 'CONFLICT') {
+        // 2. Conflict Handling
+        Alert.alert(
+          "Device Conflict",
+          "You are already logged in on another device. Do you want to logout from that device and login here?",
+          [
+            { text: "Cancel", style: "cancel" },
+            { 
+              text: "Yes, Login Here", 
+              onPress: async () => {
+                 // 3. Force Login Attempt (force = true)
+                 const forceResult = await login(email, password, true);
+                 if (!forceResult.success) {
+                    Alert.alert("Login Failed", forceResult.message || "Failed to force login.");
+                 }
+              } 
+            }
+          ]
+        );
+      } else {
+        Alert.alert("Login Failed", result.message || "Unknown Error");
+      }
     }
   };
 
@@ -95,7 +116,6 @@ const MobileLogin = () => {
             </TouchableOpacity>
           </View>
 
-          {/* Forgot Password Link - Mobile */}
           <TouchableOpacity 
             style={{ alignSelf: 'flex-end', marginBottom: 20 }} 
             onPress={() => router.push('/(auth)/ForgotPassword')}
@@ -121,7 +141,7 @@ const MobileLogin = () => {
   );
 };
 
-// ---------------- WEB LOGIN (Inline Errors) ----------------
+// ---------------- WEB LOGIN ----------------
 const WebLogin = () => {
   const { login, isLoading } = useLms();
   const router = useRouter();
@@ -131,19 +151,34 @@ const WebLogin = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
   
-  // Web specific error state
   const [errorMessage, setErrorMessage] = useState('');
 
   const handleLogin = async () => {
-    setErrorMessage(''); // Clear previous errors
+    setErrorMessage('');
     if (!email || !password) {
       setErrorMessage("Please fill all fields.");
       return;
     }
     
-    const result = await login(email, password);
+    // 1. First Attempt
+    const result = await login(email, password, false);
+    
     if (!result.success) {
-      setErrorMessage(result.message || "Login failed.");
+      if (result.errorType === 'CONFLICT') {
+        // 2. Web Confirm Dialog
+        // Uses standard browser confirm. For better UI, use a Modal component.
+        const userAgreed = confirm("You are already logged in on another device.\n\nDo you want to logout from that device and login here?");
+        
+        if (userAgreed) {
+           // 3. Force Login
+           const forceRes = await login(email, password, true);
+           if (!forceRes.success) {
+             setErrorMessage(forceRes.message || "Force login failed.");
+           }
+        }
+      } else {
+        setErrorMessage(result.message || "Login failed.");
+      }
     }
   };
 
@@ -196,7 +231,6 @@ const WebLogin = () => {
               </View>
             </View>
 
-            {/* Forgot Password Link - Web */}
             <TouchableOpacity 
               style={{ alignSelf: 'flex-end' }}
               onPress={() => router.push('/(auth)/ForgotPassword')}
@@ -210,7 +244,6 @@ const WebLogin = () => {
               </LinearGradient>
             </TouchableOpacity>
 
-            {/* ERROR MESSAGE - Only for Web */}
             {errorMessage ? (
               <Text className="text-red-500 text-sm text-center mt-2 font-medium">{errorMessage}</Text>
             ) : null}

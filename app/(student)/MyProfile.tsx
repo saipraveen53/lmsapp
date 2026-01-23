@@ -19,10 +19,13 @@ import {
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import api from '../(utils)/api'; // Make sure api is imported
+import api from '../(utils)/api';
+import { useLms } from '../(utils)/LmsContext'; // Import Context
 
 const MyProfile = () => {
     const router = useRouter();
+    const { logout } = useLms(); // Get the fixed logout function from context
+
     const [userInfo, setUserInfo] = useState({
         username: "Student",
         role: "Student",
@@ -92,15 +95,13 @@ const MyProfile = () => {
         }
     };
 
-    // Separate logic for actual logout action (Reusable)
+    // --- BUG FIX: Use the Context logout function ---
     const performLogout = async () => {
-        try {
-            await AsyncStorage.removeItem("accessToken");
-            await AsyncStorage.removeItem("userRole");
-            router.replace("/"); // Go to Login Screen
-        } catch (error) {
-            console.log("Logout failed", error);
-        }
+        // This calls the logic in LmsContext which handles:
+        // 1. Backend API Call (while token exists)
+        // 2. Clear Async Storage
+        // 3. Redirect
+        await logout(); 
     };
 
     // Modified Handle Logout for Web & Mobile
