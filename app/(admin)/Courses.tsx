@@ -1,14 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
-import Constants from 'expo-constants';
-import { LinearGradient } from 'expo-linear-gradient';
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Animated, Easing,
-  Image,
-  ImageBackground,
+  Animated,
+  Easing,
   KeyboardAvoidingView,
   LayoutAnimation,
   Linking,
@@ -17,6 +15,7 @@ import {
   Pressable,
   SafeAreaView,
   ScrollView,
+  StatusBar,
   Switch,
   Text,
   TextInput,
@@ -25,366 +24,420 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { WebView } from 'react-native-webview';
+import Svg, {
+  Circle,
+  Defs,
+  Path,
+  Rect,
+  Stop,
+  LinearGradient as SvgGradient
+} from "react-native-svg";
+import { WebView } from "react-native-webview";
 import { CourseApi } from "../(utils)/axiosInstance";
-
-
-import { StatusBar } from "react-native";
 import "../globals.css";
+
+// --- VECTOR GRAPHICS (SVGs) ---
+
+// 1. Header Background
+const HeaderBgSvg = () => (
+  <Svg
+    width="100%"
+    height="100%"
+    viewBox="0 0 400 150"
+    preserveAspectRatio="none"
+  >
+    <Defs>
+      <SvgGradient id="headerGrad" x1="0" y1="0" x2="1" y2="1">
+        <Stop offset="0" stopColor="#312e81" stopOpacity="1" />
+        <Stop offset="1" stopColor="#4f46e5" stopOpacity="1" />
+      </SvgGradient>
+    </Defs>
+    <Rect width="400" height="150" fill="url(#headerGrad)" />
+    <Circle cx="30" cy="20" r="60" fill="white" fillOpacity="0.03" />
+    <Circle cx="370" cy="80" r="50" fill="white" fillOpacity="0.03" />
+    <Path
+      d="M0 80 Q 100 40 200 80 T 400 80 V 120 H 0 Z"
+      fill="white"
+      fillOpacity="0.03"
+    />
+  </Svg>
+);
+
+// 2. Empty State Illustration
+const EmptyStateSvg = () => (
+  <Svg width="180" height="140" viewBox="0 0 200 150">
+    <Circle cx="100" cy="75" r="50" fill="#f1f5f9" />
+    <Path
+      d="M70 60 L130 60 L130 100 Q 130 110 120 110 L 80 110 Q 70 110 70 100 Z"
+      fill="white"
+      stroke="#94a3b8"
+      strokeWidth="2"
+      strokeDasharray="4 4"
+    />
+    <Circle cx="130" cy="50" r="15" fill="#e2e8f0" />
+    <Path
+      d="M125 50 L130 55 L138 45"
+      stroke="#94a3b8"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </Svg>
+);
+
+// 3. Dynamic Vector Course Thumbnail
+const CourseVectorThumbnail = ({
+  index,
+  title,
+}: {
+  index: number;
+  title?: string;
+}) => {
+  const themes = [
+    { start: "#4f46e5", end: "#818cf8", icon: "code-slash-outline" }, // Indigo
+    { start: "#059669", end: "#34d399", icon: "terminal-outline" }, // Emerald
+    { start: "#db2777", end: "#f472b6", icon: "layers-outline" }, // Pink
+    { start: "#ea580c", end: "#fb923c", icon: "cube-outline" }, // Orange
+    { start: "#0891b2", end: "#22d3ee", icon: "laptop-outline" }, // Cyan
+  ];
+
+  const theme = themes[index % themes.length];
+
+  return (
+    <View className="w-full h-full relative overflow-hidden">
+      <Svg width="100%" height="100%" preserveAspectRatio="none">
+        <Defs>
+          <SvgGradient id={`grad-${index}`} x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor={theme.start} />
+            <Stop offset="1" stopColor={theme.end} />
+          </SvgGradient>
+        </Defs>
+        <Rect width="100%" height="100%" fill={`url(#grad-${index})`} />
+        <Circle cx="10%" cy="20%" r="40" fill="white" fillOpacity="0.1" />
+        <Circle cx="90%" cy="80%" r="60" fill="white" fillOpacity="0.1" />
+      </Svg>
+      <View className="absolute inset-0 items-center justify-center">
+        <View className="bg-white/20 backdrop-blur-md p-3 rounded-2xl border border-white/30 shadow-sm">
+          <Ionicons name={theme.icon as any} size={28} color="white" />
+        </View>
+      </View>
+    </View>
+  );
+};
 
 // --- HELPER: Get Image ---
 const getCourseImage = (url: string | null) => {
   if (url && url.length > 5) return { uri: url };
-  return { uri: "https://images.unsplash.com/photo-1587620962725-abab7fe55159?q=80&w=800&auto=format&fit=crop" };
+  return null;
 };
 
-// ----------------------------------------------------------------------
-// SIDEBAR HELPER COMPONENTS (Copied from CourseDetails.tsx)
-// ----------------------------------------------------------------------
-
-const TechRow = ({ label, value }: { label: string, value: any }) => (
-  <View className="flex-row justify-between py-1 border-b border-slate-100">
-    <Text className="text-[10px] font-bold text-slate-500 uppercase">{label}</Text>
-    <Text className="text-[10px] text-slate-600 font-mono text-right flex-1 ml-4" numberOfLines={1}>
-        {value !== null && value !== undefined ? String(value) : "N/A"}
+// --- SIDEBAR HELPER COMPONENTS ---
+const TechRow = ({ label, value }: { label: string; value: any }) => (
+  <View className="flex-row justify-between py-2 border-b border-slate-100">
+    <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+      {label}
+    </Text>
+    <Text
+      className="text-[11px] text-slate-700 font-medium text-right flex-1 ml-4"
+      numberOfLines={1}
+    >
+      {value !== null && value !== undefined ? String(value) : "N/A"}
     </Text>
   </View>
-);
-
-const FeatureItem = ({ icon, text, color = "#4f46e5" }: any) => (
-    <View className="flex-row items-center mb-2 mr-4">
-        <Ionicons name={icon} size={14} color={color} />
-        <Text className="text-xs text-slate-700 ml-1.5 font-medium">{text}</Text>
-    </View>
 );
 
 // ----------------------------------------------------------------------
 // SIDEBAR COMPONENT
 // ----------------------------------------------------------------------
 const CourseDetailSidebar = ({ course, visible, onClose }: any) => {
-    const [imgError, setImgError] = useState(false);
-    // State to hold the sections
-    const [sections, setSections] = useState<any[]>([]);
-    
-    // NEW: State for Video Player
-    const [currentVideo, setCurrentVideo] = useState<string | null>(null);
+  const [sections, setSections] = useState<any[]>([]);
+  const [currentVideo, setCurrentVideo] = useState<string | null>(null);
+  const { height } = useWindowDimensions();
 
-    const { height } = useWindowDimensions();
+  const openLink = (url: string | null) => {
+    if (url)
+      Linking.openURL(url).catch((err) =>
+        console.error("Couldn't load page", err),
+      );
+  };
 
-    // Helper to handle link opening
-    const openLink = (url: string | null) => {
-        if(url) Linking.openURL(url).catch(err => console.error("Couldn't load page", err));
-    };
+  const handleVideoPress = (guid: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setCurrentVideo(guid);
+  };
 
-    // ---------------------------------------------------------
-    // NEW: Handle Video Click
-    // ---------------------------------------------------------
-    const handleVideoPress = (guid: string) => {
-        // Simple animation for smooth transition
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        setCurrentVideo(guid);
-    };
-
-    // ---------------------------------------------------------
-    // NEW: Render Player (Based on your snippet)
-    // ---------------------------------------------------------
-    const renderPlayer = () => {
-        if (!currentVideo) return null;
-
-        // Dynamic URL: Using course.libraryId instead of generic 'id'
-        const embedUrl = `https://iframe.mediadelivery.net/embed/${course.libraryId}/${currentVideo}?autoplay=true`;
-        
-        return (
-          <View className="w-full h-[350px] bg-black relative">
-            <View className="w-full h-full">
-              {Platform.OS === 'web' ? (
-                <iframe
-                  src={embedUrl}
-                  style={{ width: '100%', height: '100%', border: 'none' }}
-                  allow="autoplay; fullscreen; picture-in-picture"
-                  allowFullScreen
-                />
-              ) : (
-                <WebView
-                  key={currentVideo}
-                  source={{ uri: embedUrl }}
-                  javaScriptEnabled={true}
-                  domStorageEnabled={true}
-                  allowsFullscreenVideo={true}
-                  style={{ flex: 1, backgroundColor: '#000' }}
-                  originWhitelist={['*']}
-                />
-              )}
-            </View>
-            
-            {/* Close Player Button */}
-            <TouchableOpacity 
-                className="absolute top-4 right-4 bg-black/60 px-3 py-1.5 rounded-full border border-white/20 z-50"
-                onPress={() => {
-                    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                    setCurrentVideo(null);
-                }}
-            >
-                <Text className="text-white text-xs font-bold">Close Player ✕</Text>
-            </TouchableOpacity>
-          </View>
-        );
-    };
-
-    // ---------------------------------------------------------
-    // FETCH VIDEOS LOGIC (Kept exactly as requested)
-    // ---------------------------------------------------------
-    useEffect(() => {
-        // Reset or set initial sections from course prop
-        if (course?.sections) {
-            setSections(course.sections);
-        } else {
-            setSections([]);
-        }
-
-        const fetchBunnyVideos = async () => {
-            // Only fetch if we have a libraryId and course exists
-            if (!course?.libraryId) return;
-
-            try {
-                // Dynamic URL using course.libraryId
-                const url = `https://video.bunnycdn.com/library/${course.libraryId}/videos?page=1&itemsPerPage=100`;
-                
-                const response = await fetch(url, {
-                    method: 'GET',
-                    headers: {
-                        'AccessKey': 'eb8560ce-e8a6-414c-8e250605c6d5-627d-4c55', // Your Access Key
-                        'Accept': 'application/json',
-                    },
-                });
-
-                const data = await response.json();
-
-                if (data.items && Array.isArray(data.items)) {
-                    // Map BunnyCDN items to the UI's Section/Lecture structure
-                    const bunnySection = {
-                        id: 'bunny-dynamic-section',
-                        title: 'Course Videos (Loaded from Cloud)',
-                        orderIndex: 1,
-                        description: `${data.items.length} Videos Available`,
-                        lectures: data.items.map((item: any) => ({
-                            id: item.guid,
-                            title: item.title,
-                            description: `Duration: ${Math.floor(item.length / 60)}m ${item.length % 60}s`,
-                            videoGuid: item.guid,
-                            thumbnailUrl: null, 
-                            allowDownload: false,
-                            isPreview: false // You can set this logic based on your needs
-                        }))
-                    };
-
-                    // Update state with the fetched section
-                    setSections([bunnySection]);
-                }
-            } catch (error) {
-                console.error("Failed to fetch BunnyCDN videos:", error);
-            }
-        };
-
-        fetchBunnyVideos();
-    }, [course]); 
-    // ---------------------------------------------------------
-
-    if (!course) return null;
-
-    // Render Helpers
-    const renderDescriptionContent = () => (
-        <>
-            <Text className="text-xl font-bold text-slate-800 mb-3">About this Course</Text>
-            <Text className="text-slate-600 leading-7 text-sm">{course.description}</Text>
-            
-            <View className="mt-4 bg-purple-50 p-4 rounded-xl border border-purple-100">
-                    <Text className="font-bold text-purple-900 mb-2 flex-row items-center">
-                    <Ionicons name="school" size={16} /> What You Will Learn
-                    </Text>
-                    <Text className="text-purple-800 text-sm leading-5">{course.whatYouWillLearn}</Text>
-            </View>
-        </>
-    );
-
-    const renderSectionItem = (section: any) => (
-        <View key={section.id} className="mb-5 border border-slate-200 rounded-xl overflow-hidden">
-            <LinearGradient
-                colors={['#f8fafc', '#f1f5f9']}
-                className="p-3 border-b border-slate-200 flex-row justify-between items-center"
-            >
-                <View>
-                    <Text className="font-bold text-slate-700 text-sm">Sec {section.orderIndex}: {section.title}</Text>
-                    <Text className="text-[10px] text-slate-400 mt-0.5">{section.description}</Text>
-                </View>
-                <Text className="text-[10px] text-slate-300 font-mono">ID: {section.id}</Text>
-            </LinearGradient>
-
-            <View className="bg-white p-2">
-                {section.lectures && section.lectures.length > 0 ? (
-                    section.lectures.map((lecture: any) => (
-                        // CHANGED: View -> Pressable to handle clicks
-                        <Pressable 
-                            key={lecture.id} 
-                            onPress={() => handleVideoPress(lecture.videoGuid)} // Trigger video play
-                            className={`flex-row mb-3 last:mb-0 p-2 rounded-lg border ${currentVideo === lecture.videoGuid ? 'bg-indigo-50 border-indigo-200' : 'border-transparent hover:bg-slate-50'}`}
-                        >
-                            <View className="w-20 h-14 bg-slate-200 rounded-md overflow-hidden mr-3 relative">
-                                <Image 
-                                    // Use placeholder if thumbnail is null
-                                    source={{ uri: lecture.thumbnailUrl || "https://via.placeholder.com/150" }} 
-                                    className="w-full h-full"
-                                    resizeMode="cover"
-                                />
-                                {/* Always show play icon if it's a video */}
-                                <View className="absolute inset-0 items-center justify-center bg-black/20">
-                                    <Ionicons name={currentVideo === lecture.videoGuid ? "pause" : "play"} size={16} color="white" />
-                                </View>
-                            </View>
-                            <View className="flex-1 justify-center">
-                                <View className="flex-row justify-between">
-                                    <Text className={`font-semibold text-xs ${currentVideo === lecture.videoGuid ? 'text-indigo-700' : 'text-slate-700'}`}>
-                                        {lecture.title}
-                                    </Text>
-                                </View>
-                                <Text className="text-[10px] text-slate-500 mt-0.5" numberOfLines={1}>{lecture.description}</Text>
-                                <View className="flex-row flex-wrap items-center mt-1 gap-2">
-                                    {lecture.allowDownload && <Ionicons name="download" size={10} color="#10b981" />}
-                                    {/* Indication that this is playing */}
-                                    {currentVideo === lecture.videoGuid && <Text className="text-[9px] text-indigo-500 font-bold">Now Playing...</Text>}
-                                </View>
-                            </View>
-                        </Pressable>
-                    ))
-                ) : (
-                    <Text className="text-[10px] text-slate-400 text-center py-2 italic">No lectures found.</Text>
-                )}
-            </View>
-        </View>
-    );
+  const renderPlayer = () => {
+    if (!currentVideo) return null;
+    const embedUrl = `https://iframe.mediadelivery.net/embed/${course.libraryId}/${currentVideo}?autoplay=true`;
 
     return (
-        <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
-            <View className="flex-1 flex-row justify-end bg-black/50">
-                <Pressable className="flex-1" onPress={onClose} />
-                
-                <View className="w-full md:w-[480px] bg-slate-100 shadow-2xl h-full">
-                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}>
-                        
-                        {/* HERO IMAGE OR VIDEO PLAYER */}
-                        {/* If currentVideo exists, show Player, otherwise show Image */}
-                        {currentVideo ? (
-                            renderPlayer()
-                        ) : (
-                            <View className="relative w-full h-[350px]">
-                                <ImageBackground
-                                    source={{ uri: !imgError && course.thumbnailUrl ? course.thumbnailUrl : "https://images.unsplash.com/photo-1587620962725-abab7fe55159?q=80&w=800&auto=format&fit=crop" }}
-                                    className="w-full h-full"
-                                    resizeMode="cover"
-                                    onError={() => setImgError(true)}
-                                >
-                                    <LinearGradient
-                                        colors={['rgba(0,0,0,0.1)', 'rgba(0,0,0,0.4)', 'rgba(15, 23, 42, 1)']}
-                                        className="flex-1 justify-between p-6 pt-12"
-                                    >
-                                        <Pressable 
-                                            onPress={onClose}
-                                            className="self-start bg-black/30 backdrop-blur-md px-3 py-2 rounded-full flex-row items-center border border-white/20"
-                                        >
-                                            <Ionicons name="close" size={18} color="white" />
-                                        </Pressable>
-
-                                        <View className="mb-8">
-                                            <View className="flex-row flex-wrap gap-2 mb-3">
-                                                <View className="bg-indigo-600 px-3 py-1 rounded-md">
-                                                    <Text className="text-white text-xs font-bold uppercase">{course.category || "Development"}</Text>
-                                                </View>
-                                                {course.isFree && <View className="bg-emerald-500 px-3 py-1 rounded-md"><Text className="text-white text-xs font-bold">FREE</Text></View>}
-                                                {!course.isPublished && <View className="bg-orange-500 px-3 py-1 rounded-md"><Text className="text-white text-xs font-bold">DRAFT</Text></View>}
-                                            </View>
-
-                                            <Text className="text-2xl font-extrabold text-white shadow-lg leading-tight mb-2">
-                                                {course.title}
-                                            </Text>
-                                            
-                                            <View className="flex-row items-center gap-4">
-                                                <View className="flex-row items-center bg-black/40 px-3 py-1.5 rounded-full border border-white/10">
-                                                    <Ionicons name="star" size={16} color="#fbbf24" />
-                                                    <Text className="text-white font-bold ml-1.5">{course.rating?.toFixed(1) || "0.0"}</Text>
-                                                </View>
-                                                <View className="flex-row items-center">
-                                                    <Ionicons name="people" size={16} color="#cbd5e1" />
-                                                    <Text className="text-slate-300 ml-1.5 font-medium">{course.totalStudents} Enrolled</Text>
-                                                </View>
-                                            </View>
-                                        </View>
-                                    </LinearGradient>
-                                </ImageBackground>
-                            </View>
-                        )}
-
-                        {/* STACKED CONTENT */}
-                        <View className="px-4 -mt-10">
-                            
-                            {/* Price & Tech Card */}
-                            <View className="mb-6">
-                                <View className="bg-white rounded-xl shadow-lg p-5 border-t-4 border-indigo-500 mb-6">
-                                    <Text className="text-2xl font-bold text-slate-800 mb-1">{course.isFree ? "Free" : `$${course.price}`}</Text>
-                                    <Text className="text-xs text-slate-400 font-bold uppercase mb-4 tracking-wide">Course Price</Text>
-                                    <View className="space-y-3">
-                                        <View className="flex-row items-center"><Ionicons name="cellular-outline" size={14} color="#64748b"/><Text className="text-slate-600 ml-2 text-xs">Level: {course.level}</Text></View>
-                                        <View className="flex-row items-center"><Ionicons name="language-outline" size={14} color="#64748b"/><Text className="text-slate-600 ml-2 text-xs">Language: {course.language}</Text></View>
-                                        <View className="flex-row items-center"><Ionicons name="layers-outline" size={14} color="#64748b"/><Text className="text-slate-600 ml-2 text-xs">{course.totalLectures} Total Lectures</Text></View>
-                                    </View>
-                                </View>
-
-                                <View className="bg-slate-50 rounded-xl border border-slate-200 p-4">
-                                    <Text className="text-xs font-bold text-slate-400 uppercase mb-3 flex-row items-center">
-                                        <Ionicons name="code-slash" size={12} /> System Data
-                                    </Text>
-                                    <View className="flex-row justify-between mb-2"><Text className="text-xs text-slate-500">Library ID</Text><Text className="text-xs font-mono text-slate-700">{course.libraryId}</Text></View>
-                                    
-                                    <Pressable 
-                                        onPress={() => openLink(course.previewVideoUrl)}
-                                        className="mt-3 flex-row items-center bg-indigo-50 p-2 rounded border border-indigo-100 active:bg-indigo-100"
-                                    >
-                                         <Ionicons name="play-circle" size={16} color="#4f46e5" />
-                                         <Text className="text-[10px] text-indigo-700 font-bold ml-2 flex-1" numberOfLines={1}>
-                                            {course.previewVideoUrl || "No Preview URL"}
-                                         </Text>
-                                    </Pressable>
-                                </View>
-                            </View>
-
-                            {/* Description & Curriculum */}
-                            <View className="bg-white rounded-2xl shadow-sm p-6 min-h-[500px]">
-                                <View className="mb-8 border-b border-slate-100 pb-6">
-                                    {renderDescriptionContent()}
-                                </View>
-
-                                <View>
-                                    <View className="flex-row justify-between items-end mb-4">
-                                        <Text className="text-xl font-bold text-slate-800">Curriculum</Text>
-                                        <Text className="text-xs text-slate-400">{sections.length} Sections</Text>
-                                    </View>
-                                    {sections && sections.length > 0 ? (
-                                        sections.map((section: any) => renderSectionItem(section))
-                                    ) : (
-                                        <View className="p-8 border-2 border-dashed border-slate-200 rounded-xl items-center justify-center">
-                                            <Ionicons name="file-tray-outline" size={32} color="#cbd5e1" />
-                                            <Text className="text-slate-400 mt-2 text-xs">No curriculum content available.</Text>
-                                        </View>
-                                    )}
-                                </View>
-                            </View>
-
-                        </View>
-                    </ScrollView>
-                </View>
-            </View>
-        </Modal>
+      <View className="w-full h-[250px] md:h-[400px] bg-black relative rounded-b-2xl overflow-hidden shadow-xl">
+        <View className="w-full h-full">
+          {Platform.OS === "web" ? (
+            <iframe
+              src={embedUrl}
+              style={{ width: "100%", height: "100%", border: "none" }}
+              allow="autoplay; fullscreen; picture-in-picture"
+              allowFullScreen
+            />
+          ) : (
+            <WebView
+              key={currentVideo}
+              source={{ uri: embedUrl }}
+              javaScriptEnabled={true}
+              domStorageEnabled={true}
+              allowsFullscreenVideo={true}
+              style={{ flex: 1, backgroundColor: "#000" }}
+              originWhitelist={["*"]}
+            />
+          )}
+        </View>
+        <TouchableOpacity
+          className="absolute top-4 right-4 bg-black/60 px-3 py-1.5 rounded-full border border-white/20 z-50 backdrop-blur-md"
+          onPress={() => {
+            LayoutAnimation.configureNext(
+              LayoutAnimation.Presets.easeInEaseOut,
+            );
+            setCurrentVideo(null);
+          }}
+        >
+          <Text className="text-white text-xs font-bold">Close Player ✕</Text>
+        </TouchableOpacity>
+      </View>
     );
+  };
+
+  useEffect(() => {
+    if (course?.sections) {
+      setSections(course.sections);
+    } else {
+      setSections([]);
+    }
+
+    const fetchBunnyVideos = async () => {
+      if (!course?.libraryId) return;
+      try {
+        const url = `https://video.bunnycdn.com/library/${course.libraryId}/videos?page=1&itemsPerPage=100`;
+        const response = await fetch(url, {
+          method: "GET",
+          headers: {
+            AccessKey: "eb8560ce-e8a6-414c-8e250605c6d5-627d-4c55", // Your Key
+            Accept: "application/json",
+          },
+        });
+        const data = await response.json();
+        if (data.items && Array.isArray(data.items)) {
+          const bunnySection = {
+            id: "bunny-dynamic-section",
+            title: "Course Videos (Cloud)",
+            orderIndex: 1,
+            description: `${data.items.length} Videos Available`,
+            lectures: data.items.map((item: any) => ({
+              id: item.guid,
+              title: item.title,
+              description: `Duration: ${Math.floor(item.length / 60)}m ${item.length % 60}s`,
+              videoGuid: item.guid,
+              thumbnailUrl: null,
+              allowDownload: false,
+              isPreview: false,
+            })),
+          };
+          setSections([bunnySection]);
+        }
+      } catch (error) {
+        console.error("Failed to fetch BunnyCDN videos:", error);
+      }
+    };
+    fetchBunnyVideos();
+  }, [course]);
+
+  if (!course) return null;
+
+  const renderSectionItem = (section: any) => (
+    <View
+      key={section.id}
+      className="mb-4 bg-white rounded-xl border border-slate-100 overflow-hidden shadow-sm"
+    >
+      <View className="p-3 bg-slate-50 border-b border-slate-100 flex-row justify-between items-center">
+        <View>
+          <Text className="font-bold text-slate-700 text-sm">
+            Sec {section.orderIndex}: {section.title}
+          </Text>
+          <Text className="text-[10px] text-slate-400 mt-0.5">
+            {section.description}
+          </Text>
+        </View>
+        <Ionicons name="chevron-down" size={16} color="#94a3b8" />
+      </View>
+
+      <View className="bg-white">
+        {section.lectures && section.lectures.length > 0 ? (
+          section.lectures.map((lecture: any) => (
+            <Pressable
+              key={lecture.id}
+              onPress={() => handleVideoPress(lecture.videoGuid)}
+              className={`flex-row p-3 border-b border-slate-50 items-center ${currentVideo === lecture.videoGuid ? "bg-indigo-50" : "active:bg-slate-50"}`}
+            >
+              <View
+                className={`w-8 h-8 rounded-full items-center justify-center mr-3 ${currentVideo === lecture.videoGuid ? "bg-indigo-100" : "bg-slate-100"}`}
+              >
+                <Ionicons
+                  name={currentVideo === lecture.videoGuid ? "pause" : "play"}
+                  size={12}
+                  color={
+                    currentVideo === lecture.videoGuid ? "#4f46e5" : "#64748b"
+                  }
+                />
+              </View>
+              <View className="flex-1 justify-center">
+                <Text
+                  className={`font-semibold text-xs mb-0.5 ${currentVideo === lecture.videoGuid ? "text-indigo-700" : "text-slate-700"}`}
+                >
+                  {lecture.title}
+                </Text>
+                <Text className="text-[10px] text-slate-400" numberOfLines={1}>
+                  {lecture.description}
+                </Text>
+              </View>
+            </Pressable>
+          ))
+        ) : (
+          <Text className="text-[10px] text-slate-400 text-center py-3 italic">
+            No lectures found.
+          </Text>
+        )}
+      </View>
+    </View>
+  );
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="fade"
+      transparent
+      onRequestClose={onClose}
+    >
+      <View className="flex-1 flex-row justify-end bg-slate-900/40 backdrop-blur-sm">
+        <Pressable className="flex-1" onPress={onClose} />
+        <View className="w-full md:w-[500px] bg-slate-50 shadow-2xl h-full border-l border-white/20">
+          <View className="bg-white px-4 py-3 flex-row justify-between items-center border-b border-slate-200 pt-12 md:pt-4 shadow-sm z-10">
+            <Text
+              className="font-bold text-lg text-slate-800"
+              numberOfLines={1}
+            >
+              {course.title}
+            </Text>
+            <TouchableOpacity
+              onPress={onClose}
+              className="bg-slate-100 p-2 rounded-full"
+            >
+              <Ionicons name="close" size={20} color="#64748b" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 60 }}
+          >
+            {currentVideo ? (
+              renderPlayer()
+            ) : (
+              <View className="relative w-full h-[200px] overflow-hidden">
+                <CourseVectorThumbnail
+                  index={course.courseId ? parseInt(course.courseId) : 0}
+                />
+                <View className="absolute inset-0 p-6 justify-end">
+                  <View className="flex-row gap-2 mb-2">
+                    <View className="bg-white/20 backdrop-blur-md px-2 py-0.5 rounded border border-white/20">
+                      <Text className="text-[10px] text-white font-bold">
+                        {course.category || "Course"}
+                      </Text>
+                    </View>
+                    <View className="bg-black/30 backdrop-blur-md px-2 py-0.5 rounded border border-white/10">
+                      <Text className="text-[10px] text-white font-bold">
+                        {course.level || "Beginner"}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text className="text-white font-bold text-2xl shadow-sm">
+                    {course.title}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            <View className="p-5">
+              <View className="flex-row items-center justify-between mb-6 bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                <View>
+                  <Text className="text-2xl font-black text-slate-800">
+                    {course.isFree ? "Free" : `$${course.price}`}
+                  </Text>
+                  <Text className="text-xs text-slate-400 font-bold uppercase tracking-wider">
+                    Price
+                  </Text>
+                </View>
+                <View className="h-8 w-[1px] bg-slate-200 mx-4" />
+                <View className="flex-row gap-4">
+                  <View className="items-center">
+                    <Ionicons name="star" size={16} color="#f59e0b" />
+                    <Text className="text-[10px] font-bold text-slate-600 mt-1">
+                      {course.rating?.toFixed(1) || "New"}
+                    </Text>
+                  </View>
+                  <View className="items-center">
+                    <Ionicons name="people" size={16} color="#64748b" />
+                    <Text className="text-[10px] font-bold text-slate-600 mt-1">
+                      {course.totalStudents}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <View className="mb-6">
+                <Text className="text-sm text-slate-600 leading-6">
+                  {course.description}
+                </Text>
+              </View>
+
+              <View className="mb-6">
+                <View className="flex-row items-center mb-3">
+                  <Ionicons name="list" size={16} color="#4f46e5" />
+                  <Text className="text-sm font-bold text-slate-800 ml-2">
+                    Curriculum Content
+                  </Text>
+                </View>
+                {sections && sections.length > 0 ? (
+                  sections.map((section: any) => renderSectionItem(section))
+                ) : (
+                  <View className="p-6 bg-slate-50 border border-dashed border-slate-200 rounded-xl items-center justify-center">
+                    <Ionicons
+                      name="file-tray-outline"
+                      size={24}
+                      color="#94a3b8"
+                    />
+                    <Text className="text-slate-400 mt-2 text-xs">
+                      Content loading or empty.
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              <View className="mt-4 pt-4 border-t border-slate-100">
+                <TechRow label="Library ID" value={course.libraryId} />
+                <TechRow label="Language" value={course.language} />
+                <TechRow
+                  label="Total Duration"
+                  value={`${Math.floor(course.totalDuration / 60)}h ${course.totalDuration % 60}m`}
+                />
+              </View>
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
 };
+
 // --- TYPES ---
 interface LectureForm {
   videoLibraryId: string;
@@ -405,63 +458,67 @@ const INITIAL_FORM_STATE: LectureForm = {
   isPreview: false,
   orderIndex: "1",
 };
-const isWeb = Platform.OS === 'web';
+
+const isWeb = Platform.OS === "web";
+
+// ====================================================================
+// MAIN COMPONENT: COURSES
+// ====================================================================
 export default function Courses() {
   const [courses, setCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  
-  // --- SIDEBAR STATE ---
+
+  // --- STATE ---
   const [detailSidebarVisible, setDetailSidebarVisible] = useState(false);
   const [selectedDetailCourse, setSelectedDetailCourse] = useState<any>(null);
-
-  // --- MODAL STATE ---
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
   const [selectedCourseTitle, setSelectedCourseTitle] = useState<string>("");
   const [form, setForm] = useState<LectureForm>(INITIAL_FORM_STATE);
   const [submitting, setSubmitting] = useState(false);
-  const [errors, setErrors] = useState<Partial<Record<keyof LectureForm, string>>>({});
-
+  const [errors, setErrors] = useState<
+    Partial<Record<keyof LectureForm, string>>
+  >({});
   const [lectureMessage, setLectureMessage] = useState<string | null>(null);
-  const [lectureMessageType, setLectureMessageType] = useState<"success" | "error" | null>(null);
+  const [lectureMessageType, setLectureMessageType] = useState<
+    "success" | "error" | null
+  >(null);
+
   const { width } = useWindowDimensions();
   const router = useRouter();
 
-  // --- RESPONSIVE LOGIC (FIXED) ---
+  // --- RESPONSIVE CONFIG ---
   const isDesktop = width >= 1024;
   const isTablet = width >= 768 && width < 1024;
-  
   const columns = isDesktop ? 3 : isTablet ? 2 : 1;
-  const gap = 20; // Gap between cards
-  
-  // Mobile lo padding 16 (px-4), Desktop lo 24 (px-6)
-  const containerPadding = isDesktop ? 48 : 16; // (Left + Right Padding total)
-  
-  // Correct Card Width Formula: (Screen - Padding - TotalGapSpace) / Columns
-  const totalGapSpace = gap * (columns );
-  const cardWidth = (width - containerPadding - totalGapSpace) / columns;
+  const gap = 24;
+  const containerPadding = isDesktop ? 48 : 24;
+  const totalGapSpace = gap * (columns - 1);
+  const cardWidth = (width - containerPadding * 2 - totalGapSpace) / columns;
 
   const logoAnim = useRef(new Animated.Value(1)).current;
+
   useEffect(() => {
-  Animated.loop(
-    Animated.sequence([
-      Animated.timing(logoAnim, {
-        toValue: 1.10,
-        duration: 800,
-        easing: Easing.inOut(Easing.ease),
-        useNativeDriver: true,
-      }),
-      Animated.timing(logoAnim, {
-        toValue: 1,
-        duration: 800,
-        easing: Easing.inOut(Easing.ease),
-        useNativeDriver: true,
-      }),
-    ])
-  ).start();
-}, [logoAnim]);
-  // --- FETCH COURSES ---
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(logoAnim, {
+          toValue: 1.1,
+          duration: 1000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(logoAnim, {
+          toValue: 1,
+          duration: 1000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+  }, [logoAnim]);
+
+  // --- FETCH DATA ---
   useEffect(() => {
     fetchCourses();
   }, []);
@@ -469,41 +526,37 @@ export default function Courses() {
   const fetchCourses = () => {
     setLoading(true);
     CourseApi.get("/api/courses")
-      .then(res => {
-        setCourses(res.data.data || []);
-      })
+      .then((res) => setCourses(res.data.data || []))
       .catch(() => setCourses([]))
       .finally(() => setLoading(false));
   };
 
-  // UPDATED: Open Sidebar instead of pushing to new route
   const openCourseDetails = (course: any) => {
     setSelectedDetailCourse(course);
     setDetailSidebarVisible(true);
   };
 
   const closeCourseDetails = () => {
-      setDetailSidebarVisible(false);
-      setSelectedDetailCourse(null);
+    setDetailSidebarVisible(false);
+    setSelectedDetailCourse(null);
   };
-  
+
   const openQuizUpload = (course: any) => {
     router.push({
-        pathname: '/(admin)/BulkQuizUpload',
-        params: { 
-            courseId: course.courseId, 
-            courseName: course.title,
-            courseData: JSON.stringify(course) 
-        } 
+      pathname: "/(admin)/BulkQuizUpload",
+      params: {
+        courseId: course.courseId,
+        courseName: course.title,
+        courseData: JSON.stringify(course),
+      },
     });
   };
 
-  // --- HANDLERS FOR LECTURE FORM ---
-
+  // --- MODAL HANDLERS ---
   const openLectureModal = (course: any) => {
     setSelectedCourseId(course.courseId);
     setSelectedCourseTitle(course.title);
-    setForm(INITIAL_FORM_STATE); 
+    setForm(INITIAL_FORM_STATE);
     setErrors({});
     setModalVisible(true);
   };
@@ -514,275 +567,276 @@ export default function Courses() {
   };
 
   const updateField = (key: keyof LectureForm, value: any) => {
-    setForm(prev => ({ ...prev, [key]: value }));
-    if (errors[key]) setErrors(prev => ({ ...prev, [key]: undefined }));
+    setForm((prev) => ({ ...prev, [key]: value }));
+    if (errors[key]) setErrors((prev) => ({ ...prev, [key]: undefined }));
   };
 
   const validate = () => {
     const newErrors: any = {};
-    if (!form.title.trim()) newErrors.title = "Lecture Title is required";
-    if (!form.videoGuid.trim()) newErrors.videoGuid = "Video GUID is required";
-    if (!form.videoLibraryId.trim()) newErrors.videoLibraryId = "Library ID is required";
-    if (parseInt(form.durationSeconds) <= 0) newErrors.durationSeconds = "Duration must be > 0";
-    
+    if (!form.title.trim()) newErrors.title = "Required";
+    if (!form.videoGuid.trim()) newErrors.videoGuid = "Required";
+    if (!form.videoLibraryId.trim()) newErrors.videoLibraryId = "Required";
+    if (parseInt(form.durationSeconds) <= 0)
+      newErrors.durationSeconds = "Invalid";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const filteredCourses = courses.filter((c) =>
-    c.title?.toLowerCase().includes(search.toLowerCase())
-  );
   const handleSubmitLecture = async () => {
-  setLectureMessage(null);
-  setLectureMessageType(null);
+    setLectureMessage(null);
+    setLectureMessageType(null);
+    if (!validate()) return;
 
-  if (!validate()) {
-    setLectureMessage("Please fix the highlighted errors.");
-    setLectureMessageType("error");
-    Alert.alert("Validation Error", "Please fix the highlighted errors.");
-    return;
-  }
+    setSubmitting(true);
+    try {
+      const payload = {
+        courseId: selectedCourseId,
+        videoLibraryId: parseInt(form.videoLibraryId),
+        videoGuid: form.videoGuid,
+        title: form.title,
+        description: form.description,
+        durationSeconds: parseInt(form.durationSeconds),
+        isPreview: form.isPreview,
+        orderIndex: parseInt(form.orderIndex),
+      };
+      await CourseApi.post("/api/videos/link", payload);
+      setLectureMessage("Lecture linked successfully!");
+      setLectureMessageType("success");
+      Alert.alert("Success", "Lecture linked successfully!", [
+        { text: "OK", onPress: closeLectureModal },
+      ]);
+      fetchCourses();
+    } catch (error: any) {
+      const msg = error.response?.data?.message || "Failed to link lecture.";
+      setLectureMessage(msg);
+      setLectureMessageType("error");
+      Alert.alert("Error", msg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
-  setSubmitting(true);
-  try {
-    const payload = {
-      courseId: selectedCourseId, 
-      videoLibraryId: parseInt(form.videoLibraryId),
-      videoGuid: form.videoGuid,
-      title: form.title,
-      description: form.description,
-      durationSeconds: parseInt(form.durationSeconds),
-      isPreview: form.isPreview,
-      orderIndex: parseInt(form.orderIndex)
-    };
-
-    await CourseApi.post("/api/videos/link", payload);
-
-    setLectureMessage("Lecture linked successfully!");
-    setLectureMessageType("success");
-    Alert.alert("Success", "Lecture linked successfully!", [
-      { text: "OK", onPress: closeLectureModal }
-    ]);
-    fetchCourses(); 
-
-  } catch (error: any) {
-    console.error("Lecture Creation Error:", error);
-    const msg = error.response?.data?.message || "Failed to link lecture.";
-    setLectureMessage(msg);
-    setLectureMessageType("error");
-    Alert.alert("Error", msg);
-  } finally {
-    setSubmitting(false);
-  }
-};
-
-const handleDeleteCourse = (courseId: string) => {
-  if (Platform.OS === "web") {
-    const confirmed = window.confirm("Are you sure you want to delete this course?");
-    if (!confirmed) return;
-    (async () => {
+  const handleDeleteCourse = (courseId: string) => {
+    const performDelete = async () => {
       try {
         await CourseApi.delete(`/api/courses/${courseId}`);
-        if (window.alert) window.alert("Course deleted successfully.");
+        if (Platform.OS === "web") window.alert("Deleted Successfully");
+        else Alert.alert("Deleted", "Course deleted successfully.");
         fetchCourses();
       } catch (error: any) {
-        window.alert(error?.response?.data?.message || "Failed to delete course.");
+        const msg = error.response?.data?.message || "Failed to delete.";
+        if (Platform.OS === "web") window.alert(msg);
+        else Alert.alert("Error", msg);
       }
-    })();
-    return;
-  }
+    };
 
-  Alert.alert(
-    "Delete Course",
-    "Are you sure you want to delete this course?",
-    [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await CourseApi.delete(`/api/courses/${courseId}`);
-            Alert.alert("Deleted", "Course deleted successfully.");
-            fetchCourses();
-          } catch (error: any) {
-            Alert.alert("Error", error.response?.data?.message || "Failed to delete course.");
-          }
-        },
-      },
-    ]
-  );
-};
-const GradientStatusBar = () => {
-  // Get the height of the status bar on the current device
-  const statusBarHeight = Constants.statusBarHeight;
+    if (Platform.OS === "web") {
+      if (window.confirm("Are you sure you want to delete this course?"))
+        performDelete();
+    } else {
+      Alert.alert("Delete Course", "Are you sure?", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: performDelete },
+      ]);
+    }
+  };
 
-  return (
-    <View style={{ height: statusBarHeight }}>
-      {/* 1. Configure the Status Bar to be transparent and sit on top of our layout */}
-      <StatusBar 
-        translucent 
-        backgroundColor="transparent" 
-        barStyle="light-content" 
-      />
-      {/* 2. The Gradient acts as the background */}
-      {/*<LinearGradient
-        colors={['#4f46e5', '#7c3aed']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }} // Left to Right gradient
-        style={{ flex: 1, height: '100%', width: '100%' }}
-      />*/}
-    </View>
+  const filteredCourses = courses.filter((c) =>
+    c.title?.toLowerCase().includes(search.toLowerCase()),
   );
-};
+
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
-       <GradientStatusBar />
-      <View className="flex-1 px-6 pt-1 ">
-        
-        {/* --- Header Section with Search Bar --- */}
-        <View className="mb-8">
-          
-          <View className="flex-row items-center justify-between">
+      <StatusBar
+        translucent
+        backgroundColor="transparent"
+        barStyle="light-content"
+      />
+
+      {/* ================= COMPACT HEADER SECTION ================= */}
+      {/* Reduced Height: h-28 on mobile (approx 110px), h-36 on desktop */}
+      <View className="h-32 md:h-40 bg-indigo-900 relative z-20">
+        {/* SVG Container - Clipped */}
+        <View className="absolute inset-0 overflow-hidden">
+          <HeaderBgSvg />
+        </View>
+
+        {/* Header Content */}
+        <View
+          className={`flex-1 px-6 md:px-12 justify-start ${Platform.OS === "android" ? "pt-10" : "pt-4"}`}
+        >
+          <View className="flex-row justify-between items-center mb-1">
             <View>
-              <Text className="text-3xl font-extrabold text-slate-900 tracking-tight">Courses</Text>
-              <Text className="text-sm font-medium text-slate-500 mt-1">Manage your academy content</Text>
+              <Text className="text-2xl font-black text-white shadow-sm tracking-tight">
+                Courses
+              </Text>
+              <Text className="text-indigo-200 text-[10px] font-medium opacity-90 uppercase tracking-widest">
+                Admin Console
+              </Text>
             </View>
-            <Pressable onPress={() => router.push("/(admin)/Courseform")} className="active:opacity-90">
-              <LinearGradient
-                colors={['#4f46e5', '#7c3aed']}
-                start={{x:0, y:0}} end={{x:1, y:1}}
-                className="flex-row items-center px-5 py-3 rounded-xl shadow-lg shadow-indigo-200"
-              >
-                <Ionicons name="add" size={20} color="#fff" />
-                <Text className="text-white font-bold ml-2 text-sm">New Course</Text>
-              </LinearGradient>
-            </Pressable>
-          </View>
-          {/* --- Search Bar --- */}
-          <View style={{ marginTop: 16 }}>
-            <TextInput
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Search courses..."
-              placeholderTextColor="#94a3b8"
-              style={{
-                backgroundColor: "#f1f5f9",
-                borderRadius: 12,
-                paddingHorizontal: 16,
-                paddingVertical: 10,
-                fontSize: 16,
-                color: "#1e293b",
-                borderWidth: 1,
-                borderColor: "#e5e7eb",
-                }}
-            />
+
+            <TouchableOpacity
+              onPress={() => router.push("/(admin)/Courseform")}
+              activeOpacity={0.8}
+              className="bg-white/10 backdrop-blur-md border border-white/20 px-3 py-1.5 rounded-lg flex-row items-center hover:bg-white/20"
+            >
+              <Ionicons name="add" size={16} color="white" />
+              <Text className="text-white font-bold ml-1 text-xs">Add New</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* --- Content Grid --- */}
-       {loading ? (
+        {/* Floating Search Bar - POPPED OUT with negative margin to overlap */}
+        <View className="absolute -bottom-6 left-6 right-6 md:left-12 md:right-12 z-50">
+          <View className="bg-white rounded-xl shadow-xl shadow-slate-300 flex-row items-center px-4 h-12 border border-slate-100">
+            <Ionicons name="search" size={18} color="#475569" />
+            <TextInput
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search courses by name..."
+              placeholderTextColor="#94a3b8"
+              className="flex-1 h-full ml-3 text-slate-800 text-sm font-medium"
+              style={{ outlineStyle: "none" } as any}
+            />
+          </View>
+        </View>
+      </View>
+
+      {/* ================= CONTENT SECTION ================= */}
+      {/* Added pt-12 to push content below the floating search bar */}
+      <View className="flex-1 pt-12 px-5 md:px-12">
+        {loading ? (
           <View className="flex-1 justify-center items-center">
             <ActivityIndicator size="large" color="#4f46e5" />
           </View>
         ) : filteredCourses.length === 0 ? (
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", marginTop: 60 }}>
-            <Animated.Image
-              source={require("../../assets/images/anasol-logo.png")}
-              style={{
-                width: 100,
-                height: 100,
-                transform: [{ scale: logoAnim }],
-                marginBottom: 8,
-              }}
-              resizeMode="contain"
-            />
-            <Text style={{ color: "#64748b", fontSize: 14, fontWeight: "bold", marginTop: 12 }}>
+          <View className="flex-1 items-center justify-center opacity-70">
+            <Animated.View style={{ transform: [{ scale: logoAnim }] }}>
+              <EmptyStateSvg />
+            </Animated.View>
+            <Text className="text-slate-400 font-bold mt-6 text-center text-sm">
               {courses.length === 0
-                ? "No courses found or server unavailable."
-                : "No courses match your search."}
+                ? "No courses available yet."
+                : "No matching courses found."}
             </Text>
           </View>
         ) : (
-          <ScrollView 
-            contentContainerStyle={{ paddingBottom: 100 }} 
+          <ScrollView
+            contentContainerStyle={{ paddingBottom: 100, paddingTop: 10 }}
             showsVerticalScrollIndicator={false}
           >
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: gap }}>
-              {filteredCourses.map((c) => (
+              {filteredCourses.map((c, index) => (
                 <Pressable
                   key={c.courseId}
                   onPress={() => openCourseDetails(c)}
-                  className="bg-white rounded-2xl shadow-sm shadow-slate-200 border border-slate-100 overflow-hidden group hover:shadow-md transition-all"
+                  className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
                   style={{ width: cardWidth }}
                 >
-                  {/* Thumbnail */}
-                  <View className="h-40 md:h-48 relative bg-slate-100">
-                    <Image source={getCourseImage(c.thumbnailUrl)} className="w-full h-full" resizeMode="cover" />
-                    <View className="absolute top-3 left-3">
-                        <View className={`p-1.5 rounded-md backdrop-blur-md ${c.isFree ? 'bg-emerald-500' : 'bg-slate-900'}`}>
-                          <Text className="text-[10px] font-bold text-white uppercase tracking-wide">
-                            {c.isFree ? "FREE" : "PAID"}
+                  {/* VECTOR GRAPHIC HERO */}
+                  <View className="h-32 bg-slate-100 relative">
+                    <CourseVectorThumbnail index={index} title={c.title} />
+
+                    {/* Status Badges */}
+                    <View className="absolute top-2 left-2 flex-row gap-1.5">
+                      <View
+                        className={`px-2 py-0.5 rounded backdrop-blur-md border border-white/10 ${c.isFree ? "bg-emerald-500/90" : "bg-indigo-600/90"}`}
+                      >
+                        <Text className="text-[8px] font-bold text-white uppercase tracking-wide">
+                          {c.isFree ? "FREE" : "PAID"}
+                        </Text>
+                      </View>
+                      {!c.isPublished && (
+                        <View className="px-2 py-0.5 rounded bg-orange-500/90 backdrop-blur-md border border-white/10">
+                          <Text className="text-[8px] font-bold text-white uppercase tracking-wide">
+                            Draft
                           </Text>
                         </View>
+                      )}
                     </View>
-                    <View className="absolute top-3 right-3">
-                    <Pressable
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          handleDeleteCourse(c.courseId);
-                        }}
-                        className="bg-rose-50 p-1.5 rounded-lg items-center justify-center border border-rose-100"
-                        style={{ width: 40 }}
-                      >
-                        <Ionicons name="trash-outline" size={16} color="#e11d48" />
-                      </Pressable>
-                      </View>
+
+                    {/* Delete Action */}
+                    <TouchableOpacity
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleDeleteCourse(c.courseId);
+                      }}
+                      className="absolute top-2 right-2 bg-black/20 backdrop-blur-md p-1.5 rounded-lg border border-white/10 hover:bg-rose-500/80 transition-colors"
+                    >
+                      <Ionicons name="trash-outline" size={12} color="#fff" />
+                    </TouchableOpacity>
                   </View>
 
                   {/* Card Content */}
-                  <View className="p-4">
-                    <View className="flex-row justify-between items-start mb-1">
-                      <Text className="text-base md:text-lg font-bold text-slate-800 leading-tight flex-1 mr-2" numberOfLines={1}>
+                  <View className="p-3 flex-1 justify-between bg-white">
+                    <View>
+                      <Text
+                        className="text-base font-bold text-slate-800 leading-tight mb-1"
+                        numberOfLines={1}
+                      >
                         {c.title}
                       </Text>
-                    </View>
-                    
-                    <Text className="text-xs text-slate-500 mb-3 leading-4 h-8" numberOfLines={2}>
-                      {c.description || "No description provided."}
-                    </Text>
+                      <Text
+                        className="text-[11px] text-slate-500 mb-3 h-8 leading-4"
+                        numberOfLines={2}
+                      >
+                        {c.description || "No description provided."}
+                      </Text>
 
-                    <View className="flex-row items-center gap-4 mb-4 pb-3 border-b border-slate-50">
+                      <View className="flex-row items-center justify-between pb-3 border-b border-slate-50 mb-3">
                         <View className="flex-row items-center">
-                           <Ionicons name="book-outline" size={14} color="#94a3b8" />
-                           <Text className="text-xs text-slate-500 ml-1 font-medium">{c.lecturesCount || 0} Lessons</Text>
+                          <Ionicons
+                            name="book-outline"
+                            size={10}
+                            color="#94a3b8"
+                          />
+                          <Text className="text-[10px] text-slate-500 ml-1 font-medium">
+                            {c.lecturesCount || 0} Lessons
+                          </Text>
                         </View>
+                        <View className="flex-row items-center">
+                          <Ionicons
+                            name="time-outline"
+                            size={10}
+                            color="#94a3b8"
+                          />
+                          <Text className="text-[10px] text-slate-500 ml-1 font-medium">
+                            {Math.floor(c.totalDuration / 60)}h
+                          </Text>
+                        </View>
+                      </View>
                     </View>
 
-                    {/* Action Buttons */}
-                    <View className="flex-row gap-2">
-                      <Pressable
+                    {/* Action Footer */}
+                    <View className="flex-row gap-2 border-t border-slate-50 pt-2">
+                      <TouchableOpacity
                         onPress={(e) => {
-                            e.stopPropagation();
-                            openLectureModal(c);
-                        }} 
-                        className="bg-indigo-50/50 py-1.5 rounded-lg flex-row items-center justify-center border border-dashed border-indigo-300"
-                        style={{ width: 150 }}
+                          e.stopPropagation();
+                          openLectureModal(c);
+                        }}
+                        className="flex-1 bg-indigo-50 hover:bg-indigo-100 py-1.5 rounded-lg flex-row items-center justify-center border border-indigo-100 transition-colors"
                       >
-                        <Ionicons name="videocam-outline" size={16} color="#4f46e5" />
-                        <Text className="text-indigo-600 font-bold text-xs ml-2">Add Lecture</Text>
-                      </Pressable>
-
-                      <Pressable
+                        <Ionicons name="videocam" size={12} color="#4f46e5" />
+                        <Text className="text-indigo-700 font-bold text-[10px] ml-1">
+                          Video
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
                         onPress={(e) => {
-                            e.stopPropagation();
-                            openQuizUpload(c);
-                        }} 
-                        className="flex-1 bg-indigo-50 py-2.5 rounded-lg flex-row items-center justify-center border border-indigo-100"
+                          e.stopPropagation();
+                          openQuizUpload(c);
+                        }}
+                        className="flex-1 bg-slate-50 hover:bg-slate-100 py-1.5 rounded-lg flex-row items-center justify-center border border-slate-200 transition-colors"
                       >
-                        <Ionicons name="cloud-upload-outline" size={14} color="#4f46e5" />
-                        <Text className="text-indigo-700 font-bold text-xs ml-1.5">Quiz</Text>
-                      </Pressable>
+                        <Ionicons
+                          name="document-text-outline"
+                          size={12}
+                          color="#64748b"
+                        />
+                        <Text className="text-slate-600 font-bold text-[10px] ml-1">
+                          Quiz
+                        </Text>
+                      </TouchableOpacity>
                     </View>
                   </View>
                 </Pressable>
@@ -792,171 +846,189 @@ const GradientStatusBar = () => {
         )}
       </View>
 
-      {/* --- COURSE DETAIL SIDEBAR --- */}
-      <CourseDetailSidebar 
-         course={selectedDetailCourse}
-         visible={detailSidebarVisible}
-         onClose={closeCourseDetails}
+      {/* --- SIDEBAR & MODALS (Kept same logic) --- */}
+      <CourseDetailSidebar
+        course={selectedDetailCourse}
+        visible={detailSidebarVisible}
+        onClose={closeCourseDetails}
       />
 
-      {/* ====================================================================
-          ADD LECTURE MODAL
-         ==================================================================== */}
-      <Modal 
-        animationType="slide" 
-        transparent={true} 
-        visible={modalVisible} 
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalVisible}
         onRequestClose={closeLectureModal}
       >
-         <KeyboardAvoidingView 
-            behavior={Platform.OS === "ios" ? "padding" : "height"} 
-            className="flex-1 justify-end bg-black/60"
-         >
-             <TouchableWithoutFeedback onPress={closeLectureModal}>
-                 <View className="absolute top-0 bottom-0 left-0 right-0" />
-             </TouchableWithoutFeedback>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          className="flex-1 justify-end bg-black/60 backdrop-blur-sm"
+        >
+          <TouchableWithoutFeedback onPress={closeLectureModal}>
+            <View className="absolute top-0 bottom-0 left-0 right-0" />
+          </TouchableWithoutFeedback>
 
-             {/* Modal Container: Adjusted width & radius for Mobile */}
-             <View className={`bg-white rounded-t-3xl p-5 ${isDesktop ? "w-[600px] self-center rounded-3xl mb-10 h-[80%]" : "h-[90%] w-full"}`}>
-                 
-                 {/* Modal Header */}
-                 <View className="flex-row justify-between items-center mb-6 border-b border-slate-100 pb-4">
-                     <View className="flex-1 mr-2">
-                        <Text className="text-xl font-bold text-slate-800">Add New Lecture</Text>
-                        <Text className="text-xs text-indigo-500 font-bold mt-1 uppercase tracking-wide" numberOfLines={1}>
-                            Course: {selectedCourseTitle}
-                        </Text>
-                     </View>
-                     <TouchableOpacity onPress={closeLectureModal} className="bg-slate-100 p-2 rounded-full">
-                         <Ionicons name="close" size={24} color="#64748b" />
-                     </TouchableOpacity>
-                 </View>
+          <View
+            className={`bg-white rounded-t-3xl p-6 shadow-2xl ${isDesktop ? "w-[500px] self-center rounded-3xl mb-10 h-[85%]" : "h-[90%] w-full"}`}
+          >
+            <View className="flex-row justify-between items-center mb-6 border-b border-slate-100 pb-4">
+              <View>
+                <Text className="text-xl font-bold text-slate-800">
+                  New Lecture
+                </Text>
+                <Text className="text-xs text-indigo-500 font-bold mt-0.5">
+                  For: {selectedCourseTitle}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={closeLectureModal}
+                className="bg-slate-100 p-2 rounded-full"
+              >
+                <Ionicons name="close" size={24} color="#64748b" />
+              </TouchableOpacity>
+            </View>
 
-                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-                    
-                    {/* Basic Info */}
-                    <View className="mb-6">
-                        <Text className="text-xs font-bold text-slate-500 uppercase mb-3">Lecture Details</Text>
-                        
-                        <View className="mb-4">
-                            <Text className="text-xs font-semibold text-slate-700 mb-1.5 ml-1">Title *</Text>
-                            <TextInput 
-                                className={`bg-slate-50 border rounded-xl px-4 py-3 ${errors.title ? 'border-red-500' : 'border-slate-200'}`}
-                                value={form.title}
-                                onChangeText={(t) => updateField('title', t)}
-                                placeholder="e.g. Introduction to Spring Boot"
-                            />
-                            {errors.title && <Text className="text-red-500 text-[10px] ml-1 mt-1">{errors.title}</Text>}
-                        </View>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 40 }}
+            >
+              <Text className="text-xs font-bold text-slate-400 uppercase mb-3">
+                General Information
+              </Text>
+              <View className="space-y-4 mb-6">
+                <View>
+                  <Text className="text-xs font-semibold text-slate-700 mb-1.5 ml-1">
+                    Title *
+                  </Text>
+                  <TextInput
+                    className={`bg-slate-50 border rounded-xl px-4 py-3 ${errors.title ? "border-red-500" : "border-slate-200"}`}
+                    value={form.title}
+                    onChangeText={(t) => updateField("title", t)}
+                    placeholder="e.g. Introduction to React"
+                  />
+                </View>
+                <View>
+                  <Text className="text-xs font-semibold text-slate-700 mb-1.5 ml-1">
+                    Description
+                  </Text>
+                  <TextInput
+                    className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 h-24 text-top"
+                    value={form.description}
+                    onChangeText={(t) => updateField("description", t)}
+                    placeholder="Brief summary of the lecture..."
+                    multiline
+                  />
+                </View>
+              </View>
 
-                        <View className="mb-4">
-                            <Text className="text-xs font-semibold text-slate-700 mb-1.5 ml-1">Description</Text>
-                            <TextInput 
-                                className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 h-24 text-top"
-                                value={form.description}
-                                onChangeText={(t) => updateField('description', t)}
-                                placeholder="Brief overview..."
-                                multiline
-                            />
-                        </View>
-                    </View>
+              <Text className="text-xs font-bold text-slate-400 uppercase mb-3">
+                Video Settings
+              </Text>
+              <View className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-4 mb-6">
+                <View className="flex-row gap-3">
+                  <View className="flex-1">
+                    <Text className="text-xs font-semibold text-slate-700 mb-1.5">
+                      Library ID
+                    </Text>
+                    <TextInput
+                      className={`bg-white border rounded-xl px-3 py-2.5 ${errors.videoLibraryId ? "border-red-500" : "border-slate-200"}`}
+                      value={form.videoLibraryId}
+                      onChangeText={(t) => updateField("videoLibraryId", t)}
+                      placeholder="Lib ID"
+                      keyboardType="numeric"
+                    />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-xs font-semibold text-slate-700 mb-1.5">
+                      Sort Order
+                    </Text>
+                    <TextInput
+                      className="bg-white border border-slate-200 rounded-xl px-3 py-2.5"
+                      value={form.orderIndex}
+                      onChangeText={(t) => updateField("orderIndex", t)}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
+                <View>
+                  <Text className="text-xs font-semibold text-slate-700 mb-1.5">
+                    Video GUID *
+                  </Text>
+                  <TextInput
+                    className={`bg-white border rounded-xl px-4 py-3 ${errors.videoGuid ? "border-red-500" : "border-slate-200"}`}
+                    value={form.videoGuid}
+                    onChangeText={(t) => updateField("videoGuid", t)}
+                    placeholder="Paste BunnyCDN GUID here"
+                  />
+                </View>
+                <View className="flex-row items-center justify-between pt-2">
+                  <View className="flex-row items-center bg-white px-3 py-2 rounded-lg border border-slate-200">
+                    <Text className="text-xs font-semibold text-slate-600 mr-2">
+                      Preview?
+                    </Text>
+                    <Switch
+                      value={form.isPreview}
+                      onValueChange={(v) => updateField("isPreview", v)}
+                      trackColor={{ false: "#cbd5e1", true: "#4f46e5" }}
+                      thumbColor={"#fff"}
+                    />
+                  </View>
+                  <View className="w-1/2">
+                    <TextInput
+                      className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs"
+                      value={form.durationSeconds}
+                      onChangeText={(t) => updateField("durationSeconds", t)}
+                      placeholder="Duration (sec)"
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
+              </View>
 
-                    {/* Technical Config */}
-                    <View className="mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
-                        <Text className="text-xs font-bold text-slate-500 uppercase mb-3">Video Configuration</Text>
-                        
-                        <View className="flex-row gap-3 mb-4">
-                             <View className="flex-1">
-                                <Text className="text-xs font-semibold text-slate-700 mb-1.5 ml-1">Library ID *</Text>
-                                <TextInput 
-                                    className={`bg-white border rounded-xl px-3 py-2.5 ${errors.videoLibraryId ? 'border-red-500' : 'border-slate-200'}`}
-                                    value={form.videoLibraryId}
-                                    onChangeText={(t) => updateField('videoLibraryId', t)}
-                                    placeholder="567017"
-                                    keyboardType="numeric"
-                                />
-                             </View>
-                             <View className="flex-1">
-                                <Text className="text-xs font-semibold text-slate-700 mb-1.5 ml-1">Order Index</Text>
-                                <TextInput 
-                                    className="bg-white border border-slate-200 rounded-xl px-3 py-2.5"
-                                    value={form.orderIndex}
-                                    onChangeText={(t) => updateField('orderIndex', t)}
-                                    keyboardType="numeric"
-                                />
-                             </View>
-                        </View>
+              <TouchableOpacity
+                onPress={handleSubmitLecture}
+                disabled={submitting}
+                className="shadow-lg shadow-indigo-200"
+              >
+                <LinearGradient
+                  colors={["#4f46e5", "#4338ca"]}
+                  className="py-4 rounded-xl items-center"
+                >
+                  {submitting ? (
+                    <ActivityIndicator color="white" />
+                  ) : (
+                    <Text className="text-white font-bold text-lg">
+                      Save Lecture
+                    </Text>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
 
-                        <View className="mb-4">
-                            <Text className="text-xs font-semibold text-slate-700 mb-1.5 ml-1">Video GUID *</Text>
-                            <TextInput 
-                                className={`bg-white border rounded-xl px-4 py-3 ${errors.videoGuid ? 'border-red-500' : 'border-slate-200'}`}
-                                value={form.videoGuid}
-                                onChangeText={(t) => updateField('videoGuid', t)}
-                                placeholder="afa0e720-..."
-                            />
-                        </View>
-
-                        <View className="flex-row items-center justify-between">
-                            <View className="w-[48%]">
-                                <Text className="text-xs font-semibold text-slate-700 mb-1.5 ml-1">Duration (Sec)</Text>
-                                <TextInput 
-                                    className="bg-white border border-slate-200 rounded-xl px-3 py-2.5"
-                                    value={form.durationSeconds}
-                                    onChangeText={(t) => updateField('durationSeconds', t)}
-                                    keyboardType="numeric"
-                                    placeholder="120"
-                                />
-                            </View>
-
-                            <View className="w-[48%] flex-row items-center justify-between bg-white border border-slate-200 rounded-xl px-3 py-2">
-                                <Text className="text-xs font-bold text-slate-600">Is Preview?</Text>
-                                <Switch 
-                                    value={form.isPreview}
-                                    onValueChange={(v) => updateField('isPreview', v)}
-                                    trackColor={{ false: "#cbd5e1", true: "#4f46e5" }}
-                                    thumbColor={"#fff"}
-                                />
-                            </View>
-                        </View>
-                    </View>
-
-                    {/* Submit Button */}
-                    <TouchableOpacity 
-                      onPress={handleSubmitLecture}
-                      disabled={submitting}
-                      activeOpacity={0.8}
-                    >
-                      <LinearGradient
-                        colors={['#4f46e5', '#4338ca']}
-                        className="py-4 rounded-xl items-center shadow-lg shadow-indigo-200"
-                      >
-                        {submitting ? (
-                          <ActivityIndicator color="white" />
-                        ) : (
-                          <Text className="text-white font-bold text-lg">Create Lecture</Text>
-                        )}
-                      </LinearGradient>
-                    </TouchableOpacity>
-                    
-                    {/* Validation Message */}
-                    {lectureMessage && (
-                      <View style={{ marginTop: 12, alignItems: "center" }}>
-                        <Text style={{
-                          color: lectureMessageType === "success" ? "#16a34a" : "#dc2626",
-                          fontWeight: "bold",
-                          fontSize: 15,
-                        }}>
-                          {lectureMessage}
-                        </Text>
-                      </View>
-                    )}
-
-                 </ScrollView>
-             </View>
-         </KeyboardAvoidingView>
+              {lectureMessage && (
+                <View
+                  className={`mt-4 p-3 rounded-lg flex-row items-center justify-center ${lectureMessageType === "success" ? "bg-emerald-50" : "bg-red-50"}`}
+                >
+                  <Ionicons
+                    name={
+                      lectureMessageType === "success"
+                        ? "checkmark-circle"
+                        : "alert-circle"
+                    }
+                    size={18}
+                    color={
+                      lectureMessageType === "success" ? "#10b981" : "#ef4444"
+                    }
+                  />
+                  <Text
+                    className={`ml-2 text-sm font-bold ${lectureMessageType === "success" ? "text-emerald-700" : "text-red-700"}`}
+                  >
+                    {lectureMessage}
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
-
     </SafeAreaView>
   );
 }
