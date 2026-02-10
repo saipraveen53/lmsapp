@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import axios from "axios";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
@@ -496,6 +497,12 @@ export default function Courses() {
   const containerPadding = isDesktop ? 48 : 24;
   const totalGapSpace = gap * (columns - 1);
   const cardWidth = (width - containerPadding * 2 - totalGapSpace) / columns;
+  const [bunnyVideos, setBunnyVideos] = useState<any[]>([]);
+  const [loadingVideos, setLoadingVideos] = useState(false);
+  const [videoModalVisible, setVideoModalVisible] = useState(false);
+  const [bunnyVideoCounts, setBunnyVideoCounts] = useState<{
+    [libraryId: string]: number;
+  }>({});
 
   const logoAnim = useRef(new Animated.Value(1)).current;
 
@@ -556,7 +563,10 @@ export default function Courses() {
   const openLectureModal = (course: any) => {
     setSelectedCourseId(course.courseId);
     setSelectedCourseTitle(course.title);
-    setForm(INITIAL_FORM_STATE);
+    setForm({
+      ...INITIAL_FORM_STATE,
+      videoLibraryId: course.libraryId ? String(course.libraryId) : "",
+    });
     setErrors({});
     setBunnyVideos([]); // Clear previous videos
     setModalVisible(true);
@@ -1059,7 +1069,77 @@ export default function Courses() {
                   </View>
                 </View>
               </View>
+              <View className="mb-6">
+                <TouchableOpacity
+                  onPress={fetchBunnyVideos}
+                  disabled={loadingVideos}
+                  className="flex-row items-center justify-center bg-indigo-50 border border-indigo-200 py-3 rounded-xl active:bg-indigo-100"
+                >
+                  {loadingVideos ? (
+                    <ActivityIndicator size="small" color="#4f46e5" />
+                  ) : (
+                    <>
+                      <Ionicons
+                        name="cloud-download-outline"
+                        size={18}
+                        color="#4f46e5"
+                      />
+                      <Text className="ml-2 text-indigo-700 font-bold">
+                        Fetch from BunnyCDN
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
 
+              {/* --- BUNNY VIDEOS LIST MODAL (NESTED OR CONDITIONAL) --- */}
+              {videoModalVisible && (
+                <View className="bg-slate-100 p-4 rounded-2xl mb-6 border border-slate-200">
+                  <View className="flex-row justify-between items-center mb-3">
+                    <Text className="font-bold text-slate-700">
+                      Select a Video
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => setVideoModalVisible(false)}
+                    >
+                      <Ionicons name="close-circle" size={20} color="#94a3b8" />
+                    </TouchableOpacity>
+                  </View>
+                  <ScrollView
+                    style={{ maxHeight: 250 }}
+                    nestedScrollEnabled={true}
+                  >
+                    {bunnyVideos.map((video) => (
+                      <TouchableOpacity
+                        key={video.guid}
+                        onPress={() => selectBunnyVideo(video)}
+                        className="bg-white p-3 rounded-lg mb-2 border border-slate-200 flex-row items-center"
+                      >
+                        <View className="bg-indigo-100 p-2 rounded-md mr-3">
+                          <Ionicons name="videocam" size={16} color="#4f46e5" />
+                        </View>
+                        <View className="flex-1">
+                          <Text
+                            className="text-xs font-bold text-slate-800"
+                            numberOfLines={1}
+                          >
+                            {video.title}
+                          </Text>
+                          <Text className="text-[10px] text-slate-400">
+                            ID: {video.guid.substring(0, 8)}... |{" "}
+                            {Math.floor(video.length / 60)}m
+                          </Text>
+                        </View>
+                        <Ionicons
+                          name="chevron-forward"
+                          size={14}
+                          color="#cbd5e1"
+                        />
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
               <TouchableOpacity
                 onPress={handleSubmitLecture}
                 disabled={submitting}

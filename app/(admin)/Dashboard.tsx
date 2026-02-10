@@ -22,7 +22,7 @@ import Svg, {
   Stop,
   LinearGradient as SvgGradient,
 } from "react-native-svg";
-import { rootApi } from "../(utils)/axiosInstance";
+import { CourseApi } from "../(utils)/axiosInstance";
 // import "../globals.css";
 
 // --- TYPES & DATA ---
@@ -195,8 +195,7 @@ export default function Dashboard() {
   const [username, setUserName] = useState("Admin");
 
   useEffect(() => {
-    rootApi
-      .get("/api/courses")
+    CourseApi.get("/api/courses")
       .then((res) => {
         const rawData = res.data?.data || [];
         let globalVideoCount = 0;
@@ -254,8 +253,7 @@ export default function Dashboard() {
   });
 
   useEffect(() => {
-    rootApi
-      .get("/api/courses/count")
+    CourseApi.get("/api/courses/count")
       .then((res) => {
         setTotalCourses(res.data?.data || 0);
       })
