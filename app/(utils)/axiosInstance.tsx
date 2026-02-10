@@ -69,11 +69,11 @@ const createAxiosInstance = (baseURL: string): AxiosInstance => {
 };
 
 export const rootApi: AxiosInstance = createAxiosInstance(
-  "http://192.168.0.200:8080",
+  "http://192.168.0.111:8080",
 );
 export const CourseApi: AxiosInstance = createAxiosInstance(
-  "http://192.168.0.243:8088",
+  "http://192.168.0.230:8088",
 );
 export const QuizApi: AxiosInstance = createAxiosInstance(
-  "http://192.168.0.220:8082",
+  "http://192.168.0.111:8082",
 );
