@@ -20,6 +20,7 @@
     "axios": "^1.13.2",
     "clsx": "^2.1.1",
     "expo": "~54.0.30",
+    "expo-blur": "^15.0.8",
     "expo-constants": "~18.0.12",
     "expo-document-picker": "~14.0.8",
     "expo-file-system": "~19.0.21",

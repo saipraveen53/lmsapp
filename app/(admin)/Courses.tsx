@@ -162,6 +162,30 @@ const CourseDetailSidebar = ({ course, visible, onClose }: any) => {
       );
   };
 
+  const handleDeleteLecture = async (lectureId: string) => {
+    try {
+      // Optionally, add a confirmation dialog here
+      await CourseApi.delete(`/api/courses/lectures/${lectureId}`);
+      setSections((prevSections) =>
+        prevSections.map((section) => ({
+          ...section,
+          lectures: section.lectures.filter((l: any) => l.id !== lectureId),
+        })),
+      );
+      if (Platform.OS === "web") {
+        window.alert("Lecture deleted successfully.");
+      } else {
+        Alert.alert("Deleted", "Lecture deleted successfully.");
+      }
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || "Failed to delete lecture.";
+      if (Platform.OS === "web") {
+        window.alert(msg);
+      } else {
+        Alert.alert("Error", msg);
+      }
+    }
+  };
   const handleVideoPress = (guid: string) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setCurrentVideo(guid);
@@ -209,47 +233,62 @@ const CourseDetailSidebar = ({ course, visible, onClose }: any) => {
   };
 
   useEffect(() => {
-    if (course?.sections) {
-      setSections(course.sections);
+    if (
+      course?.lectures &&
+      Array.isArray(course.lectures) &&
+      course.lectures.length > 0
+    ) {
+      // If lectures exist in the course object, show them as a section
+      setSections([
+        {
+          id: "api-lectures-section",
+          title: "Course Lectures",
+          orderIndex: 1,
+          description: `${course.lectures.length} Lectures`,
+          lectures: course.lectures,
+        },
+      ]);
+    } else if (course?.libraryId) {
+      // Otherwise, fetch BunnyCDN videos
+      const fetchBunnyVideos = async () => {
+        try {
+          const url = `https://video.bunnycdn.com/library/${course.libraryId}/videos?page=1&itemsPerPage=100`;
+          const response = await fetch(url, {
+            method: "GET",
+            headers: {
+              AccessKey: "eb8560ce-e8a6-414c-8e250605c6d5-627d-4c55",
+              Accept: "application/json",
+            },
+          });
+          const data = await response.json();
+          if (data.items && Array.isArray(data.items)) {
+            setSections([
+              {
+                id: "bunny-dynamic-section",
+                title: "Course Videos (Cloud)",
+                orderIndex: 1,
+                description: `${data.items.length} Videos Available`,
+                lectures: data.items.map((item: any) => ({
+                  id: item.guid,
+                  title: item.title,
+                  description: `Duration: ${Math.floor(item.length / 60)}m ${item.length % 60}s`,
+                  videoGuid: item.guid,
+                  thumbnailUrl: null,
+                  allowDownload: false,
+                  isPreview: false,
+                })),
+              },
+            ]);
+          }
+        } catch (error) {
+          console.error("Failed to fetch BunnyCDN videos:", error);
+          setSections([]);
+        }
+      };
+      fetchBunnyVideos();
     } else {
       setSections([]);
     }
-
-    const fetchBunnyVideos = async () => {
-      if (!course?.libraryId) return;
-      try {
-        const url = `https://video.bunnycdn.com/library/${course.libraryId}/videos?page=1&itemsPerPage=100`;
-        const response = await fetch(url, {
-          method: "GET",
-          headers: {
-            AccessKey: "eb8560ce-e8a6-414c-8e250605c6d5-627d-4c55", // Your Key
-            Accept: "application/json",
-          },
-        });
-        const data = await response.json();
-        if (data.items && Array.isArray(data.items)) {
-          const bunnySection = {
-            id: "bunny-dynamic-section",
-            title: "Course Videos (Cloud)",
-            orderIndex: 1,
-            description: `${data.items.length} Videos Available`,
-            lectures: data.items.map((item: any) => ({
-              id: item.guid,
-              title: item.title,
-              description: `Duration: ${Math.floor(item.length / 60)}m ${item.length % 60}s`,
-              videoGuid: item.guid,
-              thumbnailUrl: null,
-              allowDownload: false,
-              isPreview: false,
-            })),
-          };
-          setSections([bunnySection]);
-        }
-      } catch (error) {
-        console.error("Failed to fetch BunnyCDN videos:", error);
-      }
-    };
-    fetchBunnyVideos();
   }, [course]);
 
   if (!course) return null;
@@ -300,6 +339,13 @@ const CourseDetailSidebar = ({ course, visible, onClose }: any) => {
                   {lecture.description}
                 </Text>
               </View>
+              {/* Delete Icon */}
+              <TouchableOpacity
+                onPress={() => handleDeleteLecture(lecture.id)}
+                className="ml-2 p-1 rounded-full bg-rose-50 border border-rose-100"
+              >
+                <Ionicons name="trash-outline" size={16} color="#dc2626" />
+              </TouchableOpacity>
             </Pressable>
           ))
         ) : (
@@ -504,6 +550,17 @@ export default function Courses() {
     [libraryId: string]: number;
   }>({});
 
+  const [unpublishModalVisible, setUnpublishModalVisible] = useState(false);
+  const [publishModalVisible, setPublishModalVisible] = useState(false);
+  const [successModal, setSuccessModal] = useState<{
+    visible: boolean;
+    message: string;
+  }>({ visible: false, message: "" });
+  const [unpublishTarget, setUnpublishTarget] = useState<any>(null);
+  const [unpublishedCourses, setUnpublishedCourses] = useState<any[]>([]);
+  const [showUnpublished, setShowUnpublished] = useState(false);
+  const [publishTarget, setPublishTarget] = useState<any>(null);
+  const [loadingUnpublished, setLoadingUnpublished] = useState(false);
   const logoAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -525,6 +582,70 @@ export default function Courses() {
     ).start();
   }, [logoAnim]);
 
+  useEffect(() => {
+    fetchUnpublishedCourses();
+  }, []);
+
+  const fetchUnpublishedCourses = async () => {
+    try {
+      setLoadingUnpublished(true);
+      const res = await CourseApi.get("/api/courses/unpublished");
+      setUnpublishedCourses(res.data.data || []);
+    } catch {
+      setUnpublishedCourses([]);
+    } finally {
+      setLoadingUnpublished(false);
+    }
+  };
+
+  // Unpublish handler
+  const handleUnpublish = (course: any) => {
+    setUnpublishTarget(course);
+    setUnpublishModalVisible(true);
+  };
+
+  const confirmUnpublish = async () => {
+    if (!unpublishTarget) return;
+    try {
+      await CourseApi.put(`/api/courses/${unpublishTarget.courseId}/unpublish`);
+      setSuccessModal({
+        visible: true,
+        message: "Course unpublished successfully!",
+      });
+      setUnpublishModalVisible(false);
+      setUnpublishTarget(null);
+      fetchCourses();
+      fetchUnpublishedCourses();
+    } catch {
+      setSuccessModal({
+        visible: true,
+        message: "Failed to unpublish course.",
+      });
+    }
+  };
+
+  // Publish handler
+  const handlePublish = (course: any) => {
+    setPublishTarget(course);
+    setPublishModalVisible(true);
+  };
+
+  const confirmPublish = async () => {
+    if (!publishTarget) return;
+    try {
+      await CourseApi.put(`/api/courses/${publishTarget.courseId}/publish`);
+      setSuccessModal({
+        visible: true,
+        message: "Course published successfully!",
+      });
+      setPublishModalVisible(false);
+      setPublishTarget(null);
+      fetchCourses();
+      fetchUnpublishedCourses();
+    } catch {
+      setSuccessModal({ visible: true, message: "Failed to publish course." });
+    }
+  };
   // --- FETCH DATA ---
   useEffect(() => {
     fetchCourses();
@@ -532,7 +653,7 @@ export default function Courses() {
 
   const fetchCourses = () => {
     setLoading(true);
-    CourseApi.get("/api/courses")
+    CourseApi.get("/api/courses/published")
       .then((res) => setCourses(res.data.data || []))
       .catch(() => setCourses([]))
       .finally(() => setLoading(false));
@@ -760,15 +881,30 @@ export default function Courses() {
                 Admin Console
               </Text>
             </View>
-
-            <TouchableOpacity
-              onPress={() => router.push("/(admin)/Courseform")}
-              activeOpacity={0.8}
-              className="bg-white/10 backdrop-blur-md border border-white/20 px-3 py-1.5 rounded-lg flex-row items-center hover:bg-white/20"
-            >
-              <Ionicons name="add" size={16} color="white" />
-              <Text className="text-white font-bold ml-1 text-xs">Add New</Text>
-            </TouchableOpacity>
+            <View className="flex-row items-center gap-2">
+              <TouchableOpacity
+                onPress={() => {
+                  setShowUnpublished(true);
+                  fetchUnpublishedCourses();
+                }}
+                className="bg-white/10 backdrop-blur-md border border-white/20 px-3 py-1.5 rounded-lg flex-row items-center hover:bg-white/20 mr-2"
+              >
+                <Ionicons name="eye-off-outline" size={16} color="white" />
+                <Text className="text-white font-bold ml-1 text-xs">
+                  Unpublished ({unpublishedCourses.length})
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => router.push("/(admin)/Courseform")}
+                activeOpacity={0.8}
+                className="bg-white/10 backdrop-blur-md border border-white/20 px-3 py-1.5 rounded-lg flex-row items-center hover:bg-white/20"
+              >
+                <Ionicons name="add" size={16} color="white" />
+                <Text className="text-white font-bold ml-1 text-xs">
+                  Add New
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
@@ -923,6 +1059,22 @@ export default function Courses() {
                           Quiz
                         </Text>
                       </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleUnpublish(c);
+                        }}
+                        className="flex-1 bg-rose-50 hover:bg-rose-100 py-1.5 rounded-lg flex-row items-center justify-center border border-rose-200 transition-colors"
+                      >
+                        <Ionicons
+                          name="eye-off-outline"
+                          size={12}
+                          color="#dc2626"
+                        />
+                        <Text className="text-rose-700 font-bold text-[10px] ml-1">
+                          Unpublish
+                        </Text>
+                      </TouchableOpacity>
                     </View>
                   </View>
                 </Pressable>
@@ -931,7 +1083,292 @@ export default function Courses() {
           </ScrollView>
         )}
       </View>
+      {/* --- UNPUBLISH MODAL (Alert Style) --- */}
+      <Modal
+        visible={unpublishModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setUnpublishModalVisible(false)}
+      >
+        <View className="flex-1 justify-center items-center bg-black/50 px-6">
+          <View className="bg-white rounded-[28px] p-8 w-full max-w-sm items-center shadow-2xl">
+            <View className="bg-orange-100 p-4 rounded-full mb-4">
+              <Ionicons name="alert-circle" size={32} color="#f59e42" />
+            </View>
 
+            <Text className="font-extrabold text-xl mb-2 text-slate-800 text-center">
+              Unpublish Course?
+            </Text>
+
+            <Text className="text-slate-500 mb-8 text-center leading-5">
+              Are you sure you want to hide{" "}
+              <Text className="font-semibold text-slate-700">
+                "{unpublishTarget?.title}"
+              </Text>{" "}
+              from students?
+            </Text>
+
+            <View className="flex-row gap-3 w-full">
+              <TouchableOpacity
+                onPress={() => setUnpublishModalVisible(false)}
+                activeOpacity={0.7}
+                className="flex-1 bg-slate-100 py-3.5 rounded-2xl items-center"
+              >
+                <Text className="font-bold text-slate-600">No, Keep it</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={confirmUnpublish}
+                activeOpacity={0.8}
+                className="flex-1 bg-rose-500 py-3.5 rounded-2xl items-center shadow-lg shadow-rose-200"
+              >
+                <Text className="font-bold text-white">Yes, Unpublish</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* --- Success Modal --- */}
+      <Modal
+        visible={successModal.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSuccessModal({ visible: false, message: "" })}
+      >
+        <View className="flex-1 justify-center items-center bg-black/50 px-6">
+          <View className="bg-white rounded-[28px] p-8 w-full max-w-sm items-center shadow-2xl border border-emerald-50">
+            <View className="bg-emerald-100 p-4 rounded-full mb-4">
+              <Ionicons name="checkmark-circle" size={32} color="#10b981" />
+            </View>
+
+            <Text className="font-extrabold text-xl text-emerald-800 text-center">
+              Success!
+            </Text>
+
+            <Text className="text-slate-500 mt-2 mb-8 text-center">
+              {successModal.message}
+            </Text>
+
+            <TouchableOpacity
+              onPress={() => setSuccessModal({ visible: false, message: "" })}
+              activeOpacity={0.8}
+              className="w-full bg-slate-900 py-3.5 rounded-2xl items-center"
+            >
+              <Text className="font-bold text-white text-base">Awesome</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* --- Unpublished Courses Modal --- */}
+      <Modal
+        visible={showUnpublished}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowUnpublished(false)}
+      >
+        <View className="flex-1 bg-slate-900/60 justify-end">
+          <View className="bg-white rounded-t-[32px] p-6 w-full h-[80%] shadow-2xl">
+            {/* Header Handle */}
+            <View className="w-12 h-1.5 bg-slate-200 rounded-full self-center mb-6" />
+
+            <View className="flex-row justify-between items-center mb-6 px-2">
+              <View>
+                <Text className="font-black text-2xl text-slate-800">
+                  Drafts
+                </Text>
+                <Text className="text-slate-400 text-sm">
+                  Courses currently hidden
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => setShowUnpublished(false)}
+                className="bg-slate-100 p-2 rounded-full"
+              >
+                <Ionicons name="close" size={24} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            {loadingUnpublished ? (
+              <View className="flex-1 justify-center">
+                <ActivityIndicator size="large" color="#4f46e5" />
+              </View>
+            ) : unpublishedCourses.length === 0 ? (
+              <View className="flex-1 justify-center items-center">
+                <Ionicons name="Construct-outline" size={60} color="#e2e8f0" />
+                <Text className="text-slate-400 text-center mt-4 font-medium">
+                  Your draft folder is empty.
+                </Text>
+              </View>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    gap: gap,
+                  }}
+                  className="pb-10"
+                >
+                  {unpublishedCourses.map((course: any, index: number) => (
+                    <View
+                      key={course.courseId}
+                      className="bg-slate-50 border border-slate-100 rounded-[20px] p-5 flex-col justify-between"
+                      style={{
+                        width: cardWidth, // use the same cardWidth as published courses
+                        marginBottom: gap,
+                      }}
+                    >
+                      {/* Thumbnail & Info */}
+                      <View className="mb-4">
+                        <View className="h-32 bg-slate-100 relative rounded-xl overflow-hidden">
+                          <CourseVectorThumbnail
+                            index={index}
+                            title={course.title}
+                          />
+
+                          {/* Status Badges */}
+                          <View className="absolute top-2 left-2 flex-row gap-1.5">
+                            <View
+                              className={`px-2 py-0.5 rounded backdrop-blur-md border border-white/10 ${
+                                course.isFree
+                                  ? "bg-emerald-500/90"
+                                  : "bg-indigo-600/90"
+                              }`}
+                            >
+                              <Text className="text-[8px] font-bold text-white uppercase tracking-wide">
+                                {course.isFree ? "FREE" : "PAID"}
+                              </Text>
+                            </View>
+                            {!course.isPublished && (
+                              <View className="px-2 py-0.5 rounded bg-orange-500/90 backdrop-blur-md border border-white/10">
+                                <Text className="text-[8px] font-bold text-white uppercase tracking-wide">
+                                  Draft
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+
+                          {/* Delete Action */}
+                          {/*<TouchableOpacity
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              handleDeleteCourse(course.courseId);
+                            }}
+                            className="absolute top-2 right-2 bg-black/20 backdrop-blur-md p-1.5 rounded-lg border border-white/10 hover:bg-rose-500/80 transition-colors"
+                          >
+                            <Ionicons
+                              name="trash-outline"
+                              size={12}
+                              color="#fff"
+                            />
+                          </TouchableOpacity>*/}
+                        </View>
+                      </View>
+
+                      {/* Card Content */}
+                      <Text
+                        className="font-bold text-slate-800 text-lg"
+                        numberOfLines={1}
+                      >
+                        {course.title}
+                      </Text>
+                      <Text className="text-slate-400 text-xs mt-1 uppercase tracking-widest font-semibold">
+                        Hidden from Store
+                      </Text>
+                      <Text
+                        className="text-[11px] text-slate-500 mb-3 h-8 leading-4"
+                        numberOfLines={2}
+                      >
+                        {course.description || "No description provided."}
+                      </Text>
+                      <View className="flex-row items-center justify-between pb-3 border-b border-slate-50 mb-3">
+                        <View className="flex-row items-center">
+                          <Ionicons
+                            name="book-outline"
+                            size={10}
+                            color="#94a3b8"
+                          />
+                          <Text className="text-[10px] text-slate-500 ml-1 font-medium">
+                            {course.lecturesCount || 0} Lessons
+                          </Text>
+                        </View>
+                        <View className="flex-row items-center">
+                          <Ionicons
+                            name="time-outline"
+                            size={10}
+                            color="#94a3b8"
+                          />
+                          <Text className="text-[10px] text-slate-500 ml-1 font-medium">
+                            {Math.floor(course.totalDuration / 60)}h
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Publish Button */}
+                      <TouchableOpacity
+                        onPress={() => handlePublish(course)}
+                        activeOpacity={0.7}
+                        className="bg-indigo-600 px-5 py-2.5 rounded-xl shadow-md shadow-indigo-200"
+                      >
+                        <Text className="font-bold text-white">Publish</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* --- Confirm Publish Modal --- */}
+      <Modal
+        visible={publishModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPublishModalVisible(false)}
+      >
+        <View className="flex-1 justify-center items-center bg-black/50 px-6">
+          <View className="bg-white rounded-[28px] p-8 w-full max-w-sm items-center shadow-2xl">
+            <View className="bg-indigo-100 p-4 rounded-full mb-4">
+              <Ionicons name="rocket" size={32} color="#4f46e5" />
+            </View>
+
+            <Text className="font-extrabold text-xl mb-2 text-slate-800 text-center">
+              Ready to Go Live?
+            </Text>
+
+            <Text className="text-slate-500 mb-8 text-center leading-5">
+              This will make{" "}
+              <Text className="font-semibold text-slate-700">
+                "{publishTarget?.title}"
+              </Text>{" "}
+              visible to all students.
+            </Text>
+
+            <View className="flex-row gap-3 w-full">
+              <TouchableOpacity
+                onPress={() => setPublishModalVisible(false)}
+                activeOpacity={0.7}
+                className="flex-1 bg-slate-100 py-3.5 rounded-2xl items-center"
+              >
+                <Text className="font-bold text-slate-600">Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={confirmPublish}
+                activeOpacity={0.8}
+                className="flex-1 bg-indigo-600 py-3.5 rounded-2xl items-center shadow-lg shadow-indigo-200"
+              >
+                <Text className="font-bold text-white text-base">Go Live</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
       {/* --- SIDEBAR & MODALS (Kept same logic) --- */}
       <CourseDetailSidebar
         course={selectedDetailCourse}

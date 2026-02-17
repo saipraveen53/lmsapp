@@ -308,7 +308,13 @@ export default function CourseForm() {
       newErrors.description = "Description is required";
     if (parseFloat(form.price) < 0)
       newErrors.price = "Price cannot be negative";
-
+    if (
+      !form.libraryId ||
+      !/^\d+$/.test(form.libraryId) ||
+      parseInt(form.libraryId, 10) <= 0
+    ) {
+      newErrors.libraryId = "Library ID must be a positive number";
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -450,7 +456,12 @@ export default function CourseForm() {
                 <InputField
                   label="Price ($)"
                   value={form.price}
-                  onChange={(t: string) => updateField("price", t)}
+                  onChange={(t: string) => {
+                    // Allow only numbers and one dot, no negative sign
+                    if (/^(?!0\d)\d*\.?\d*$/.test(t)) {
+                      updateField("price", t);
+                    }
+                  }}
                   keyboardType="numeric"
                   error={errors.price}
                 />
@@ -504,8 +515,14 @@ export default function CourseForm() {
             <InputField
               label="Bunny Library ID (Internal)"
               value={form.libraryId}
-              onChange={(t: string) => updateField("libraryId", t)}
+              onChange={(t: string) => {
+                if (/^\d*$/.test(t)) {
+                  updateField("libraryId", t);
+                }
+              }}
               placeholder="e.g., 572507"
+              keyboardType="numeric"
+              error={errors.libraryId}
               rightElement={
                 <Pressable
                   onPress={fetchBunnyVideos}
